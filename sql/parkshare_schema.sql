@@ -16,9 +16,11 @@ CREATE TABLE parkings (
                           description TEXT,
                           location VARCHAR(255),
                           price DECIMAL(10,2),
+                          status ENUM('pending','approved','rejected') DEFAULT 'approved',
+                          main_image VARCHAR(255) NULL,
                           available_from DATETIME,
                           available_to DATETIME,
-                          status ENUM('pending','approved','rejected') DEFAULT 'approved',
+                          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                           FOREIGN KEY (owner_id) REFERENCES users(id)
 );
 
@@ -29,8 +31,7 @@ INSERT INTO users (username, email, password_hash, role) VALUES
                                                              ('bob', 'bob@test.com', '$2y$10$b5aZ4Cqos0HZg3CCW.MmyOn0uIdrUc09llz3pUEaINHvj10JB.siK', 'user');
 
 
--- Sample Parking Spots
-INSERT INTO parkings (owner_id, title, description, location, price, available_from, available_to, status) VALUES
-                                                                                                               (2, 'City Center Parking', 'Secure parking in downtown', 'Berlin Mitte', 10.00, '2025-11-10 08:00:00', '2025-11-10 20:00:00', 'approved'),
-                                                                                                               (3, 'Office Garage', 'Covered parking near office', 'Berlin Friedrichshain', 8.50, '2025-11-10 09:00:00', '2025-11-10 18:00:00', 'approved'),
-                                                                                                               (2, 'Weekend Parking', 'Cheap weekend parking', 'Berlin Kreuzberg', 5.00, '2025-11-15 08:00:00', '2025-11-15 22:00:00', 'approved');
+INSERT INTO parkings (owner_id, title, description, location, price, main_image, available_from, available_to, status) VALUES
+                                                                                                                           (2, 'City Center Parking', 'Secure parking in downtown', 'Berlin Mitte', 10.00, 'city_center.jpg', '2025-11-10 08:00:00', '2025-11-10 20:00:00', 'approved'),
+                                                                                                                           (3, 'Office Garage', 'Covered parking near office', 'Berlin Friedrichshain', 8.50, 'office_garage.jpg', '2025-11-10 09:00:00', '2025-11-10 18:00:00', 'approved'),
+                                                                                                                           (2, 'Weekend Parking', 'Cheap weekend parking', 'Berlin Kreuzberg', 5.00, 'weekend_parking.jpg', '2025-11-15 08:00:00', '2025-11-15 22:00:00', 'approved');
