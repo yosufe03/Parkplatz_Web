@@ -1,28 +1,57 @@
 <?php
+include("includes/db_connect.php");
 session_start();
-if(!isset($_SESSION['user_id'])) {
+
+if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
 }
-include("includes/db_connect.php");
+
+$userId = $_SESSION['user_id'];
+$username = $_SESSION['username'];
 ?>
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <title>Dashboard - ParkShare</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body class="container mt-5">
-<h2>Welcome, <?= htmlspecialchars($_SESSION['username']) ?>!</h2>
-<p><a href="logout.php">Logout</a></p>
+<body>
 
-<h3>Search Parking</h3>
-<form method="GET" action="search.php" class="row g-3 mb-3">
-    <div class="col-md-4"><input class="form-control" name="location" placeholder="Location"></div>
-    <div class="col-md-2"><button class="btn btn-primary" type="submit">Search</button></div>
-</form>
+<?php include("includes/header.php"); ?>
+
+<div class="container mt-5 text-center">
+    <h1>Willkommen, <?= htmlspecialchars($username) ?>!</h1>
+    <p class="lead mt-3">Hier kannst du deine Parkplätze verwalten und neue hinzufügen.</p>
+
+    <!-- Dashboard Buttons -->
+    <div class="row justify-content-center mt-4">
+        <div class="col-md-6">
+            <a href="parking_add_form.php" class="btn btn-success w-100 mb-3">Neuen Parkplatz hinzufügen</a>
+            <a href="my_parkings.php" class="btn btn-secondary w-100 mb-3">Meine Parkplätze verwalten</a>
+            <a href="my_bookings.php" class="btn btn-info w-100 mb-3">Meine Buchungen</a>
+        </div>
+    </div>
+
+    <!-- User's recent parking offers -->
+    <h4 class="mt-5">Letzte Parkplätze</h4>
+    <div class="list-group mt-3">
+        <?php
+        $stmt = $conn->prepare("SELECT * FROM parkings WHERE owner_id=? ORDER BY id DESC");
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        while ($row = $result->fetch_assoc()):
+            ?>
+            <a href="parking.php?id=<?= $row['id'] ?>" class="list-group-item list-group-item-action">
+                <?= htmlspecialchars($row['title']) ?> — <?= htmlspecialchars($row['location']) ?>
+            </a>
+        <?php endwhile; ?>
+    </div>
+</div>
+
 </body>
 </html>
-

@@ -1,5 +1,6 @@
 <?php
 include("includes/db_connect.php");
+session_start();
 
 $location = $_GET['location'] ?? '';
 
@@ -17,22 +18,46 @@ $result = $stmt->get_result();
     <title>Search Results - ParkShare</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body class="container mt-5">
-<h2>Search Results for "<?= htmlspecialchars($location) ?>"</h2>
-<a href="dashboard.php">Back to Dashboard</a>
-<div class="row mt-3">
-    <?php while($row = $result->fetch_assoc()): ?>
-        <div class="col-md-4 mb-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title"><?= htmlspecialchars($row['title']) ?></h5>
-                    <p class="card-text"><?= htmlspecialchars($row['description']) ?></p>
-                    <p><strong>Location:</strong> <?= htmlspecialchars($row['location']) ?></p>
-                    <p><strong>Price:</strong> €<?= number_format($row['price'],2) ?></p>
-                </div>
+<body>
+
+<?php include("includes/header.php"); ?>
+
+<div class="container mt-5">
+    <h2>Search Results for "<?= htmlspecialchars($location) ?>"</h2>
+    <a href="dashboard.php" class="btn btn-outline-secondary mb-3">Back to Dashboard</a>
+
+    <div class="row mt-3">
+        <?php while($row = $result->fetch_assoc()): ?>
+            <div class="col-md-4 mb-3">
+                <!-- Make entire card clickable -->
+                <a href="parking.php?id=<?= $row['id'] ?>" class="text-decoration-none text-dark">
+                    <div class="card h-100 shadow-sm">
+
+                        <?php if (!empty($row['main_image'])): ?>
+                            <img src="uploads/<?= htmlspecialchars($row['main_image']) ?>"
+                                 class="card-img-top"
+                                 style="height: 180px; object-fit: cover;">
+                        <?php else: ?>
+                            <div class="card-img-top d-flex justify-content-center align-items-center bg-light text-muted"
+                                 style="height:180px;">
+                                No Image
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="card-body">
+                            <h5 class="card-title"><?= htmlspecialchars($row['title']) ?></h5>
+                            <p class="card-text">
+                                <?= htmlspecialchars(mb_strimwidth($row['description'], 0, 100, "...")) ?>
+                            </p>
+                            <p><strong>Location:</strong> <?= htmlspecialchars($row['location']) ?></p>
+                            <p><strong>Price:</strong> €<?= number_format($row['price'], 2) ?></p>
+                        </div>
+                    </div>
+                </a>
             </div>
-        </div>
-    <?php endwhile; ?>
+        <?php endwhile; ?>
+    </div>
 </div>
+
 </body>
 </html>
