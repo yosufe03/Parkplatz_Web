@@ -32,23 +32,59 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 ?>
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <title>Register - ParkShare</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        main {
+            flex: 1;
+        }
+        .register-card {
+            max-width: 400px;
+            margin: 50px auto;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+    </style>
 </head>
-<body class="container mt-5">
-    <h2>Register</h2>
-    <form method="POST">
-        <input class="form-control mb-2" type="text" name="username" placeholder="Username" required>
-        <input class="form-control mb-2" type="email" name="email" placeholder="Email" required>
-        <input class="form-control mb-2" type="password" name="password" placeholder="Password" required>
-        <input class="form-control mb-2" type="password" name="confirm_password" placeholder="Confirm Password" required>
-        <button class="btn btn-primary" type="submit">Register</button>
-    </form>
-    <?php if ($message) echo "<p class='text-danger mt-2'>$message</p>"; ?>
-    <p class="mt-2"><a href="login.php">Already have an account? Login</a></p>
+<body>
+
+<?php include("includes/header.php"); ?>
+
+<main class="container">
+    <div class="register-card bg-white">
+        <h2 class="text-center mb-4">Register</h2>
+        <form method="POST">
+            <div class="mb-3">
+                <input class="form-control" type="text" name="username" placeholder="Username" required>
+            </div>
+            <div class="mb-3">
+                <input class="form-control" type="email" name="email" placeholder="Email" required>
+            </div>
+            <div class="mb-3">
+                <input class="form-control" type="password" name="password" placeholder="Password" required>
+            </div>
+            <div class="mb-3">
+                <input class="form-control" type="password" name="confirm_password" placeholder="Confirm Password" required>
+            </div>
+            <button class="btn btn-primary w-100" type="submit">Register</button>
+        </form>
+        <?php if($message): ?>
+            <p class="text-danger mt-3 text-center"><?= htmlspecialchars($message) ?></p>
+        <?php endif; ?>
+        <p class="mt-3 text-center">
+            Already have an account? <a href="login.php">Login</a>
+        </p>
+    </div>
+</main>
+
 </body>
 </html>
-
