@@ -16,11 +16,12 @@ CREATE TABLE parkings (
                           description TEXT,
                           location VARCHAR(255),
                           price DECIMAL(10,2),
-                          status ENUM('pending','approved','rejected') DEFAULT 'approved',
+                          status ENUM('pending','approved','rejected') DEFAULT 'pending',
                           main_image VARCHAR(255) NULL,
                           available_from DATETIME,
                           available_to DATETIME,
                           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                          modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                           FOREIGN KEY (owner_id) REFERENCES users(id)
 );
 
