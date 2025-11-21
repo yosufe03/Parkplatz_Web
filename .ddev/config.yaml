@@ -16,6 +16,10 @@ corepack_enable: false
 
 host_db_port: 54321
 
+hooks:
+  post-start:
+    - exec: bash /var/www/html/.ddev/scripts/initialize_db.sh
+
 
 # Key features of DDEV's config.yaml:
 
