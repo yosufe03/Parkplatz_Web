@@ -7,6 +7,8 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+$_SESSION['return_to'] = $_SERVER['REQUEST_URI']; // store current page
+
 $userId = $_SESSION['user_id'];
 $username = $_SESSION['username'];
 
@@ -20,6 +22,20 @@ $isAdmin = $currentUser['role'] === 'admin';
 
 if (!$isAdmin) {
     die("Access denied.");
+}
+
+// Handle deletion
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
+    $deleteId = (int)$_POST['delete_id'];
+
+    if ($isAdmin) {
+        $stmtDel = $conn->prepare("DELETE FROM parkings WHERE id=?");
+        $stmtDel->bind_param("i", $deleteId);
+        $stmtDel->execute();
+        $stmtDel->close();
+        header("Location: all_parkings.php"); // reload page
+        exit;
+    }
 }
 
 // Sorting & filtering
@@ -146,9 +162,13 @@ $result = $stmt->get_result();
                 <td><?= htmlspecialchars($row['created_at']) ?></td>
                 <td><?= htmlspecialchars($row['modified_at']) ?></td>
                 <td><?= htmlspecialchars($row['status']) ?></td>
-                <td>
+                <td class="text-center">
                     <a href="parking_edit.php?id=<?= $row['id'] ?>" class="btn btn-sm btn-warning mb-1">Bearbeiten</a>
-                    <a href="parking_delete.php?id=<?= $row['id'] ?>" class="btn btn-sm btn-danger mb-1" onclick="return confirm('Möchten Sie diesen Parkplatz wirklich löschen?')">Löschen</a>
+
+                    <form method="POST" style="display:inline;" onsubmit="return confirm('Möchten Sie diesen Parkplatz wirklich löschen?');">
+                        <input type="hidden" name="delete_id" value="<?= $row['id'] ?>">
+                        <button type="submit" class="btn btn-sm btn-danger mb-1">Löschen</button>
+                    </form>
                 </td>
             </tr>
         <?php endwhile; ?>

@@ -10,6 +10,9 @@ if (!isset($_SESSION['user_id'])) {
 
 $userId = $_SESSION['user_id'];
 
+// Store this page as the return URL for edits/views
+$_SESSION['return_to'] = $_SERVER['REQUEST_URI'];
+
 // Fetch all parkings for this user
 $stmt = $conn->prepare("SELECT * FROM parkings WHERE owner_id=? ORDER BY id DESC");
 $stmt->bind_param("i", $userId);

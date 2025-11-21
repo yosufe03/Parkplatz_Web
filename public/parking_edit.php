@@ -18,6 +18,9 @@ $resultUser = $stmtUser->get_result();
 $currentUser = $resultUser->fetch_assoc();
 $isAdmin = $currentUser['role'] === 'admin';
 
+// Capture return URL
+$returnUrl = $_SESSION['return_to'] ?? 'my_parkings.php';
+
 $parkingId = $_GET['id'] ?? 0;
 
 // Fetch parking info
@@ -58,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmtDel->bind_param("ii", $parkingId, $userId);
         }
         $stmtDel->execute();
-        header("Location: my_parkings.php");
+        header("Location: $returnUrl");
         exit;
     }
 
@@ -108,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    header("Location: my_parkings.php");
+    header("Location: $returnUrl");
     exit;
 }
 
@@ -130,7 +133,7 @@ if (isset($_GET['delete_img'])) {
         $stmt2->execute();
     }
 
-    header("Location: parking_edit.php?id=$parkingId");
+    header("Location: parking_edit.php?id=$parkingId&return=" . urlencode($returnUrl));
     exit;
 }
 
@@ -186,8 +189,11 @@ sort($images);
         </div>
 
         <button type="submit" class="btn btn-success">Speichern</button>
-        <a href="my_parkings.php" class="btn btn-secondary">Abbrechen</a>
-        <button type="submit" name="delete_parking" class="btn btn-danger float-end" onclick="return confirm('Willst du diesen Parkplatz wirklich löschen?');">Parkplatz löschen</button>
+        <a href="<?= htmlspecialchars($returnUrl) ?>" class="btn btn-secondary">Abbrechen</a>
+        <button type="submit" name="delete_parking" class="btn btn-danger float-end"
+                onclick="return confirm('Willst du diesen Parkplatz wirklich löschen?');">
+            Parkplatz löschen
+        </button>
     </form>
 
     <hr class="my-5">
@@ -197,7 +203,8 @@ sort($images);
         <?php foreach ($images as $img): ?>
             <div class="col-md-3 mb-3 img-card">
                 <img src="<?= htmlspecialchars($img) ?>" class="parking-img">
-                <a href="?id=<?= $parkingId ?>&delete_img=<?= basename($img) ?>" class="btn btn-danger btn-sm delete-btn">X</a>
+                <a href="?id=<?= $parkingId ?>&delete_img=<?= basename($img) ?>&return=<?= urlencode($returnUrl) ?>"
+                   class="btn btn-danger btn-sm delete-btn">X</a>
             </div>
         <?php endforeach; ?>
     </div>
