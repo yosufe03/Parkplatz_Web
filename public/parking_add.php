@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $price = $_POST['price'];
 
     // Insert new parking listing
-    $stmt = $conn->prepare("INSERT INTO parkings (owner_id, title, description, location, price, status) VALUES (?, ?, ?, ?, ?, 'approved')");
+    $stmt = $conn->prepare("INSERT INTO parkings (owner_id, title, description, location, price) VALUES (?, ?, ?, ?, ?)");
     $stmt->bind_param("isssd", $userId, $title, $description, $location, $price);
     $stmt->execute();
     $parkingId = $stmt->insert_id;

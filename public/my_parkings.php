@@ -60,9 +60,20 @@ $result = $stmt->get_result();
                         <p class="card-text"><?= htmlspecialchars(mb_strimwidth($row['description'], 0, 80, "...")) ?></p>
                         <p><strong>Location:</strong> <?= htmlspecialchars($row['location']) ?></p>
                         <p><strong>Price:</strong> €<?= number_format($row['price'], 2) ?></p>
+                        <p><strong>Status:</strong>
+                            <?php
+                            switch ($row['status']) {
+                                case 'approved': echo '<span class="text-success">Approved</span>'; break;
+                                case 'pending': echo '<span class="text-warning">Pending</span>'; break;
+                                case 'rejected': echo '<span class="text-danger">Rejected</span>'; break;
+                                default: echo htmlspecialchars($row['status']);
+                            }
+                            ?>
+                        </p>
                         <a href="parking.php?id=<?= $row['id'] ?>" class="btn btn-primary btn-sm">View</a>
                         <a href="parking_edit.php?id=<?= $row['id'] ?>" class="btn btn-secondary btn-sm">Edit</a>
                     </div>
+
                 </div>
             </div>
         <?php endwhile; ?>

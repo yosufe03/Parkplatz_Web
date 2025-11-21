@@ -43,7 +43,6 @@ $parking = $result->fetch_assoc();
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['delete_parking'])) {
-        // Delete all images
         $uploadDir = __DIR__ . "/uploads/parkings/$parkingId/";
         if (is_dir($uploadDir)) {
             foreach (glob($uploadDir . "*") as $file) {
@@ -52,7 +51,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             rmdir($uploadDir);
         }
 
-        // Delete parking from DB
         if ($isAdmin) {
             $stmtDel = $conn->prepare("DELETE FROM parkings WHERE id=?");
             $stmtDel->bind_param("i", $parkingId);
@@ -65,27 +63,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // Update parking info
+    // Collect fields
     $title = $_POST['title'];
     $description = $_POST['description'];
     $location = $_POST['location'];
     $price = $_POST['price'];
 
+    // Admin can also edit owner_id and status
     if ($isAdmin) {
-        $stmtUpdate = $conn->prepare("UPDATE parkings SET title=?, description=?, location=?, price=? WHERE id=?");
-        $stmtUpdate->bind_param("sssdi", $title, $description, $location, $price, $parkingId);
+        $ownerId = $_POST['owner_id'];
+        $status = $_POST['status'];
+        $stmtUpdate = $conn->prepare("UPDATE parkings SET title=?, description=?, location=?, price=?, owner_id=?, status=? WHERE id=?");
+        $stmtUpdate->bind_param("sssdisi", $title, $description, $location, $price, $ownerId, $status, $parkingId);
     } else {
         $stmtUpdate = $conn->prepare("UPDATE parkings SET title=?, description=?, location=?, price=? WHERE id=? AND owner_id=?");
         $stmtUpdate->bind_param("sssdii", $title, $description, $location, $price, $parkingId, $userId);
     }
     $stmtUpdate->execute();
 
-    // Handle new image uploads
+    // Handle image uploads as before...
     if (!empty($_FILES['images']['name'][0])) {
         $uploadDir = __DIR__ . "/uploads/parkings/$parkingId/";
         mkdir($uploadDir, 0755, true);
 
-        // Determine next number for images
         $existingImages = glob($uploadDir . "*.{jpg,jpeg,png}", GLOB_BRACE);
         $existingNumbers = [];
         foreach ($existingImages as $img) {
@@ -99,14 +99,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $ext = pathinfo($_FILES['images']['name'][$tmpIndex], PATHINFO_EXTENSION);
             $filename = $nextNumber . "." . $ext;
             move_uploaded_file($tmpName, $uploadDir . $filename);
-
-            // Set main_image if not exists
             if (empty($parking['main_image'])) {
                 $stmt2 = $conn->prepare("UPDATE parkings SET main_image=? WHERE id=?");
                 $stmt2->bind_param("si", $filename, $parkingId);
                 $stmt2->execute();
             }
-
             $nextNumber++;
         }
     }
@@ -115,29 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-// Handle individual image deletion
-if (isset($_GET['delete_img'])) {
-    $deleteImg = $_GET['delete_img'];
-    $filePath = __DIR__ . "/uploads/parkings/$parkingId/$deleteImg";
-    if (file_exists($filePath)) {
-        unlink($filePath);
-    }
-
-    // Update main_image if needed
-    if ($parking['main_image'] === $deleteImg) {
-        $imagesLeft = glob(__DIR__ . "/uploads/parkings/$parkingId/*.{jpg,jpeg,png}", GLOB_BRACE);
-        sort($imagesLeft);
-        $newMain = $imagesLeft ? basename($imagesLeft[0]) : null;
-        $stmt2 = $conn->prepare("UPDATE parkings SET main_image=? WHERE id=?");
-        $stmt2->bind_param("si", $newMain, $parkingId);
-        $stmt2->execute();
-    }
-
-    header("Location: parking_edit.php?id=$parkingId&return=" . urlencode($returnUrl));
-    exit;
-}
-
-// Get all images
+// Fetch images
 $imageDir = "uploads/parkings/$parkingId/";
 $images = glob($imageDir . "*.{jpg,jpeg,png}", GLOB_BRACE);
 sort($images);
@@ -181,6 +156,22 @@ sort($images);
             <label class="form-label">Preis (€ pro Tag)</label>
             <input type="number" step="0.01" name="price" class="form-control" value="<?= htmlspecialchars($parking['price']) ?>" required>
         </div>
+
+        <?php if ($isAdmin): ?>
+            <div class="mb-3">
+                <label class="form-label">Besitzer ID</label>
+                <input type="number" name="owner_id" class="form-control" value="<?= htmlspecialchars($parking['owner_id']) ?>" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-select" required>
+                    <option value="pending" <?= $parking['status'] === 'pending' ? 'selected' : '' ?>>Pending</option>
+                    <option value="approved" <?= $parking['status'] === 'approved' ? 'selected' : '' ?>>Approved</option>
+                    <option value="rejected" <?= $parking['status'] === 'rejected' ? 'selected' : '' ?>>Rejected</option>
+                </select>
+            </div>
+        <?php endif; ?>
 
         <div class="mb-3">
             <label class="form-label">Neue Bilder hochladen</label>

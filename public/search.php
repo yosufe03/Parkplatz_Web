@@ -27,14 +27,26 @@ $result = $stmt->get_result();
     <a href="dashboard.php" class="btn btn-outline-secondary mb-3">Back to Dashboard</a>
 
     <div class="row mt-3">
-        <?php while($row = $result->fetch_assoc()): ?>
+        <?php while($row = $result->fetch_assoc()):
+            $parkingId = $row['id'];
+            $mainImage = null;
+            $imageDir = "uploads/parkings/$parkingId/";
+            if (!empty($row['main_image']) && file_exists($imageDir . $row['main_image'])) {
+                $mainImage = $imageDir . $row['main_image'];
+            } else {
+                // fallback: first image in folder
+                $images = glob($imageDir . "*.{jpg,jpeg,png}", GLOB_BRACE);
+                sort($images);
+                $mainImage = $images[0] ?? null;
+            }
+            ?>
             <div class="col-md-4 mb-3">
                 <!-- Make entire card clickable -->
-                <a href="parking.php?id=<?= $row['id'] ?>" class="text-decoration-none text-dark">
+                <a href="parking.php?id=<?= $parkingId ?>" class="text-decoration-none text-dark">
                     <div class="card h-100 shadow-sm">
 
-                        <?php if (!empty($row['main_image'])): ?>
-                            <img src="uploads/<?= htmlspecialchars($row['main_image']) ?>"
+                        <?php if ($mainImage): ?>
+                            <img src="<?= htmlspecialchars($mainImage) ?>"
                                  class="card-img-top"
                                  style="height: 180px; object-fit: cover;">
                         <?php else: ?>

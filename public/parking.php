@@ -7,7 +7,7 @@ $id = $_GET['id'] ?? 0;
 $stmt = $conn->prepare("SELECT p.*, u.username AS owner_name
                         FROM parkings p
                         LEFT JOIN users u ON p.owner_id = u.id
-                        WHERE p.id = ? AND p.status='approved'");
+                        WHERE p.id = ?");
 $stmt->bind_param("i", $id);
 $stmt->execute();
 $result = $stmt->get_result();
