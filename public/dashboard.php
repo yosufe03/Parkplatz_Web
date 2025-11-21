@@ -29,7 +29,7 @@ $username = $_SESSION['username'];
     <!-- Dashboard Buttons -->
     <div class="row justify-content-center mt-4">
         <div class="col-md-6">
-            <a href="parking_add_form.php" class="btn btn-success w-100 mb-3">Neuen Parkplatz hinzufügen</a>
+            <a href="parking_add.php" class="btn btn-success w-100 mb-3">Neuen Parkplatz hinzufügen</a>
             <a href="my_parkings.php" class="btn btn-secondary w-100 mb-3">Meine Parkplätze verwalten</a>
             <a href="my_bookings.php" class="btn btn-info w-100 mb-3">Meine Buchungen</a>
         </div>

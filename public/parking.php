@@ -1,9 +1,9 @@
 <?php
 include("includes/db_connect.php");
-session_start();
 
 $id = $_GET['id'] ?? 0;
 
+// Fetch parking info with owner
 $stmt = $conn->prepare("SELECT p.*, u.username AS owner_name
                         FROM parkings p
                         LEFT JOIN users u ON p.owner_id = u.id
@@ -17,10 +17,20 @@ if ($result->num_rows == 0) {
 }
 
 $parking = $result->fetch_assoc();
+
+// Get all images for this parking
+$imageDir = "uploads/parkings/" . $parking['id'] . "/";
+
+// Scan for multiple extensions
+$images = glob($imageDir . "*.{jpg,jpeg,png}", GLOB_BRACE);
+
+// Sort by filename (1.jpg, 2.png, etc.)
+sort($images);
+
 ?>
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <title><?= htmlspecialchars($parking['title']) ?> - ParkShare</title>
@@ -28,18 +38,16 @@ $parking = $result->fetch_assoc();
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
     <style>
-        .main-image {
+        .carousel-item img {
             width: 100%;
             height: 400px;
             object-fit: cover;
             border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
     </style>
 </head>
 
 <body>
-
 <?php include("includes/header.php"); ?>
 
 <div class="container mt-4">
@@ -48,10 +56,26 @@ $parking = $result->fetch_assoc();
 
     <div class="row">
         <div class="col-md-7">
-            <?php if ($parking['main_image']): ?>
-                <img src="uploads/<?= htmlspecialchars($parking['main_image']) ?>" class="main-image">
+            <?php if (!empty($images)): ?>
+                <div id="parkingCarousel" class="carousel slide" data-bs-ride="carousel">
+                    <div class="carousel-inner">
+                        <?php foreach ($images as $index => $img): ?>
+                            <div class="carousel-item <?= $index === 0 ? 'active' : '' ?>">
+                                <img src="<?= htmlspecialchars($img) ?>" alt="Parking Image <?= $index + 1 ?>">
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <button class="carousel-control-prev" type="button" data-bs-target="#parkingCarousel" data-bs-slide="prev">
+                        <span class="carousel-control-prev-icon"></span>
+                        <span class="visually-hidden">Previous</span>
+                    </button>
+                    <button class="carousel-control-next" type="button" data-bs-target="#parkingCarousel" data-bs-slide="next">
+                        <span class="carousel-control-next-icon"></span>
+                        <span class="visually-hidden">Next</span>
+                    </button>
+                </div>
             <?php else: ?>
-                <div class="main-image d-flex justify-content-center align-items-center bg-light text-muted">
+                <div class="bg-light text-center d-flex justify-content-center align-items-center" style="height:400px;">
                     No Image Available
                 </div>
             <?php endif; ?>
@@ -78,9 +102,8 @@ $parking = $result->fetch_assoc();
             <p><?= nl2br(htmlspecialchars($parking['description'])) ?></p>
         </div>
     </div>
-
 </div>
 
-
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

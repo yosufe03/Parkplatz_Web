@@ -26,7 +26,7 @@ $username = $isLoggedIn ? $_SESSION['username'] : '';
                 <li class="nav-item"><a class="nav-link" href="index.php">Home</a></li>
                 <?php if ($isLoggedIn): ?>
                     <li class="nav-item"><a class="nav-link" href="dashboard.php">Dashboard</a></li>
-                    <li class="nav-item"><a class="nav-link" href="parking_add_form.php">Add Parking</a></li>
+                    <li class="nav-item"><a class="nav-link" href="parking_add.php">Add Parking</a></li>
                     <li class="nav-item"><a class="nav-link" href="my_parkings.php">My Parkings</a></li>
                     <li class="nav-item"><a class="nav-link" href="my_bookings.php">My Bookings</a></li>
                 <?php endif; ?>
