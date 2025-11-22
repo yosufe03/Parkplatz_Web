@@ -14,7 +14,7 @@ $username = $isLoggedIn ? $_SESSION['username'] : '';
 </head>
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark position-relative">
-    <div class="container-fluid position-relative">
+    <div class="container-fluid d-flex justify-content-between align-items-center position-relative">
 
         <!-- Left: Brand -->
         <a class="navbar-brand" href="index.php">ParkShare</a>
@@ -42,7 +42,7 @@ $username = $isLoggedIn ? $_SESSION['username'] : '';
         <!-- Right: login/username always visible -->
         <div class="d-flex align-items-center ms-auto">
             <?php if ($isLoggedIn): ?>
-                <span class="navbar-text text-white me-2">Hello, <?= htmlspecialchars($username) ?></span>
+                <span class="navbar-text text-white me-2"> <?= htmlspecialchars($username) ?></span>
                 <a href="logout.php" class="btn btn-outline-light btn-sm">Logout</a>
             <?php else: ?>
                 <a href="login.php" class="btn btn-outline-light btn-sm me-2">Login</a>
@@ -59,7 +59,7 @@ $username = $isLoggedIn ? $_SESSION['username'] : '';
     /* Mobile-first: Hamburger button centered and fully visible */
     .navbar-toggler.d-lg-none {
         position: absolute;
-        /*top: 0.5rem;          !* small padding from top *!*/
+        top: 0;           /* attach to top of navbar */
         left: 50%;
         transform: translateX(-50%);
         z-index: 2;
@@ -73,7 +73,7 @@ $username = $isLoggedIn ? $_SESSION['username'] : '';
             flex-direction: column;
             width: 100%;
             text-align: center;
-            margin-top: 3rem; /* push menu below hamburger */
+            /*margin-top: 3rem; !* push menu below hamburger *!*/
         }
 
         .navbar-nav .nav-item {
