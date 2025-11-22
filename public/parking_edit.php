@@ -1,6 +1,6 @@
 <?php
-include("includes/db_connect.php");
 session_start();
+include("includes/db_connect.php");
 
 // Redirect if not logged in
 if (!isset($_SESSION['user_id'])) {
@@ -120,18 +120,17 @@ sort($images);
 
 <!DOCTYPE html>
 <html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <title>Parkplatz bearbeiten - <?= htmlspecialchars($parking['title']) ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .parking-img { width: 100%; height: 150px; object-fit: cover; border-radius: 5px; }
-        .img-card { position: relative; }
-        .delete-btn { position: absolute; top: 5px; right: 5px; }
-    </style>
-</head>
+<?php
+    $pageTitle = "Parkplatz bearbeiten";
+    include("includes/header.php");
+?>
+
+<style>
+    .parking-img { width: 100%; height: 150px; object-fit: cover; border-radius: 5px; }
+    .img-card { position: relative; }
+    .delete-btn { position: absolute; top: 5px; right: 5px; }
+</style>
 <body>
-<?php include("includes/header.php"); ?>
 
 <div class="container mt-5">
     <h2>Parkplatz bearbeiten</h2>

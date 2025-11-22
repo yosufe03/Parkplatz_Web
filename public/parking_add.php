@@ -1,6 +1,6 @@
 <?php
-include("includes/db_connect.php");
 session_start();
+include("includes/db_connect.php");
 
 // Redirect if not logged in
 if (!isset($_SESSION['user_id'])) {
@@ -48,13 +48,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <!DOCTYPE html>
 <html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <title>Neuen Parkplatz hinzufügen - ParkShare</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+<?php
+    $pageTitle = "Neuer Parkplatz";
+    include("includes/header.php");
+?>
+
 <body>
-<?php include("includes/header.php"); ?>
 
 <div class="container mt-5">
     <h2>Neuen Parkplatz hinzufügen</h2>

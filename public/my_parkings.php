@@ -1,6 +1,6 @@
 <?php
-include("includes/db_connect.php");
 session_start();
+include("includes/db_connect.php");
 
 // Redirect if not logged in
 if (!isset($_SESSION['user_id'])) {
@@ -22,20 +22,19 @@ $result = $stmt->get_result();
 
 <!DOCTYPE html>
 <html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <title>Meine Parkplätze - Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .card-img-top {
-            width: 100%;
-            height: 180px;
-            object-fit: cover;
-        }
-    </style>
-</head>
+<?php
+    $pageTitle = "Meine Parkplätze";
+    include("includes/header.php");
+?>
+
+<style>
+    .card-img-top {
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+    }
+</style>
 <body>
-<?php include("includes/header.php"); ?>
 
 <div class="container mt-5">
     <h2>Meine Parkplätze</h2>

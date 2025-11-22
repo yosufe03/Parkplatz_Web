@@ -1,6 +1,6 @@
 <?php
-include("includes/db_connect.php");
 session_start();
+include("includes/db_connect.php");
 
 $location = $_GET['location'] ?? '';
 
@@ -13,14 +13,12 @@ $result = $stmt->get_result();
 
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Search Results - ParkShare</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body>
+<?php
+    $pageTitle = "Search Results";
+    include("includes/header.php");
+?>
 
-<?php include("includes/header.php"); ?>
+<body>
 
 <div class="container mt-5">
     <h2>Search Results for "<?= htmlspecialchars($location) ?>"</h2>

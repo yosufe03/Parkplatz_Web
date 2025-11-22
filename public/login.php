@@ -28,10 +28,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <!DOCTYPE html>
 <html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <title>Login - ParkShare</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<?php
+    $pageTitle = "Login";
+    include("includes/header.php");
+?>
     <style>
         body {
             min-height: 100vh;
@@ -49,10 +49,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
     </style>
-</head>
-<body>
 
-<?php include("includes/header.php"); ?>
+<body>
 
 <main class="container">
     <div class="login-card bg-white">

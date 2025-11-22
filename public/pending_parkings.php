@@ -1,6 +1,6 @@
 <?php
-include("includes/db_connect.php");
 session_start();
+include("includes/db_connect.php");
 
 // Redirect if not logged in
 if (!isset($_SESSION['user_id'])) {
@@ -57,13 +57,12 @@ $result = $stmt->get_result();
 
 <!DOCTYPE html>
 <html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <title>Parkplätze freigeben - ParkShare</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+<?php
+    $pageTitle = "Parkplätze freigeben";
+    include("includes/header.php");
+?>
+
 <body>
-<?php include("includes/header.php"); ?>
 
 <div class="container mt-5">
     <h2>Parkplätze freigeben</h2>
