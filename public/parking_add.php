@@ -11,6 +11,7 @@ if (!isset($_SESSION['user_id'])) {
 $userId = $_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // TODO: variablen überprüfen
     $title = $_POST['title'];
     $description = $_POST['description'];
     $location = $_POST['location'];

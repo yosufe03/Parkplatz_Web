@@ -2,6 +2,7 @@
 session_start();
 include("includes/db_connect.php");
 
+// Prüfen, ob eingeloggt
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
@@ -10,7 +11,7 @@ if (!isset($_SESSION['user_id'])) {
 $userId = $_SESSION['user_id'];
 $username = $_SESSION['username'];
 
-// Check if admin
+// Prüfen, ob Admin  / session var erstellen
 $stmtUser = $conn->prepare("SELECT role FROM users WHERE id=?");
 $stmtUser->bind_param("i", $userId);
 $stmtUser->execute();
@@ -22,8 +23,8 @@ $isAdmin = $currentUser['role'] === 'admin';
 <!DOCTYPE html>
 <html lang="de">
 <?php
-    $pageTitle = "Dashboard";
-    include("includes/header.php");
+$pageTitle = "Dashboard";
+include("includes/header.php");
 ?>
 
 <body>
@@ -42,6 +43,7 @@ $isAdmin = $currentUser['role'] === 'admin';
             <?php if ($isAdmin): ?>
                 <a href="pending_parkings.php" class="btn btn-warning w-100 mb-3">Parkplätze freigeben</a>
                 <a href="all_parkings.php" class="btn btn-primary w-100 mb-3">Alle Parkplätze anzeigen</a>
+                <a href="user_manage.php" class="btn btn-danger w-100 mb-3">User moderieren</a>
             <?php endif; ?>
         </div>
     </div>
@@ -51,11 +53,20 @@ $isAdmin = $currentUser['role'] === 'admin';
     <div class="list-group mt-3">
         <?php
         if ($isAdmin) {
-            $stmt = $conn->prepare("SELECT p.*, u.username AS owner_name FROM parkings p LEFT JOIN users u ON p.owner_id = u.id ORDER BY p.id DESC");
+            $stmt = $conn->prepare("
+                SELECT p.*, u.username AS owner_name 
+                FROM parkings p 
+                LEFT JOIN users u ON p.owner_id = u.id 
+                ORDER BY p.id DESC
+            ");
             $stmt->execute();
             $result = $stmt->get_result();
         } else {
-            $stmt = $conn->prepare("SELECT * FROM parkings WHERE owner_id=? ORDER BY id DESC");
+            $stmt = $conn->prepare("
+                SELECT * FROM parkings 
+                WHERE owner_id=? 
+                ORDER BY id DESC
+            ");
             $stmt->bind_param("i", $userId);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -65,6 +76,7 @@ $isAdmin = $currentUser['role'] === 'admin';
             ?>
             <a href="parking_edit.php?id=<?= $row['id'] ?>" class="list-group-item list-group-item-action">
                 <?= htmlspecialchars($row['title']) ?> — <?= htmlspecialchars($row['location']) ?>
+
                 <?php if ($isAdmin): ?>
                     <small class="text-muted"> (Besitzer: <?= htmlspecialchars($row['owner_name'] ?? 'N/A') ?>)</small>
                 <?php endif; ?>
