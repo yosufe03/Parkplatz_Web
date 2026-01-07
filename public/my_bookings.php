@@ -10,13 +10,6 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = (int)$_SESSION['user_id'];
 
-/*
-  Assumptions:
-  - bookings table: id, parking_id, user_id, booking_start (DATE), booking_end (DATE), created_at (optional)
-  - parkings table: id, title, location, price
-  Adjust column names if yours differ.
-*/
-
 // Optional: handle cancel action (simple version)
 if (isset($_POST['cancel_booking_id'])) {
     $cancel_id = (int)$_POST['cancel_booking_id'];
@@ -31,17 +24,17 @@ if (isset($_POST['cancel_booking_id'])) {
     exit;
 }
 
-// Fetch bookings + parking info
+// Fetch bookings + parking info (IMPORTANT: use b.price_day)
 $stmt = $conn->prepare("
     SELECT 
         b.id AS booking_id,
         b.booking_start,
         b.booking_end,
+        b.price_day,
         b.created_at,
         p.id AS parking_id,
         p.title,
-        p.location,
-        p.price
+        p.location
     FROM bookings b
     JOIN parkings p ON p.id = b.parking_id
     WHERE b.user_id = ?
@@ -57,24 +50,20 @@ while ($row = $res->fetch_assoc()) {
 }
 $stmt->close();
 
-// Helpers
 function daysInclusive($start, $end) {
     $s = new DateTime($start);
     $e = new DateTime($end);
-    // inclusive days: diff + 1
-    $diff = (int)$s->diff($e)->days;
-    return $diff + 1;
+    return $s->diff($e)->days + 1;
 }
 
 $today = date('Y-m-d');
 ?>
 <!DOCTYPE html>
 <html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <title>Meine Buchungen</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+<?php
+    $pageTitle = "Meine Buchungen";
+    include("includes/header.php");
+?>
 <body class="bg-light">
 
 <div class="container py-4">
@@ -118,9 +107,7 @@ $today = date('Y-m-d');
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <?php
-                        $past = count($bookings) - $upcoming;
-                        ?>
+                        <?php $past = count($bookings) - $upcoming; ?>
                         <div class="p-2 bg-white border rounded">
                             <div class="text-muted small">Vergangen</div>
                             <div class="fs-5 fw-semibold"><?= $past ?></div>
@@ -133,7 +120,8 @@ $today = date('Y-m-d');
         <?php foreach ($bookings as $b): ?>
             <?php
             $nDays = daysInclusive($b['booking_start'], $b['booking_end']);
-            $total = $nDays * (float)$b['price'];
+            $priceDay = (float)$b['price_day'];
+            $total = $nDays * $priceDay;
 
             $status = "Vergangen";
             $badge = "secondary";
@@ -164,7 +152,7 @@ $today = date('Y-m-d');
                             <div class="mt-2">
                                 <div><strong>Zeitraum:</strong> <?= htmlspecialchars($b['booking_start']) ?> → <?= htmlspecialchars($b['booking_end']) ?></div>
                                 <div><strong>Tage:</strong> <?= (int)$nDays ?></div>
-                                <div><strong>Preis/Tag:</strong> €<?= number_format((float)$b['price'], 2) ?></div>
+                                <div><strong>Preis/Tag (fix):</strong> €<?= number_format($priceDay, 2) ?></div>
                                 <div><strong>Gesamt:</strong> €<?= number_format($total, 2) ?></div>
                             </div>
                         </div>

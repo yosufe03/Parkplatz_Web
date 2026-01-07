@@ -2,7 +2,7 @@
 session_start();
 include("includes/db_connect.php");
 
-// Require login (recommended)
+// Require login
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
@@ -10,16 +10,15 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = (int)$_SESSION['user_id'];
 
-$parking_id  = isset($_POST['parking_id']) ? (int)$_POST['parking_id'] : 0;
-$start_date  = $_POST['booking_start'] ?? '';
-$end_date    = $_POST['booking_end'] ?? '';
+$parking_id = isset($_POST['parking_id']) ? (int)$_POST['parking_id'] : 0;
+$start_date = $_POST['booking_start'] ?? '';
+$end_date   = $_POST['booking_end'] ?? '';
 
 function isValidDate($d) {
     return is_string($d) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d);
 }
 
 function fail($msg) {
-    // Show a visual error page
     ?>
     <!DOCTYPE html>
     <html lang="de">
@@ -58,6 +57,21 @@ if ($start_date < $today || $end_date < $today) {
 if ($end_date < $start_date) {
     fail("Enddatum muss nach dem Startdatum liegen.");
 }
+
+/* 0) Fetch parking info + snapshot price */
+$pStmt = $conn->prepare("SELECT title, price FROM parkings WHERE id = ?");
+$pStmt->bind_param("i", $parking_id);
+$pStmt->execute();
+$pRes = $pStmt->get_result();
+if ($pRes->num_rows === 0) {
+    $pStmt->close();
+    fail("Parking not found.");
+}
+$pRow = $pRes->fetch_assoc();
+$pStmt->close();
+
+$title = $pRow['title'] ?? 'Parking';
+$price_day = (float)$pRow['price']; // snapshot price at booking time
 
 /* 1) Check availability: every day in range must be covered */
 $availCheck = $conn->prepare("
@@ -105,12 +119,12 @@ if ((int)$conf['conflicts'] > 0) {
     fail("Dieser Zeitraum ist bereits gebucht.");
 }
 
-/* 3) Insert booking */
+/* 3) Insert booking WITH snapshot price_day */
 $ins = $conn->prepare("
-    INSERT INTO bookings (parking_id, user_id, booking_start, booking_end)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO bookings (parking_id, user_id, booking_start, booking_end, price_day)
+    VALUES (?, ?, ?, ?, ?)
 ");
-$ins->bind_param("iiss", $parking_id, $user_id, $start_date, $end_date);
+$ins->bind_param("iissd", $parking_id, $user_id, $start_date, $end_date, $price_day);
 
 if (!$ins->execute()) {
     $ins->close();
@@ -119,24 +133,17 @@ if (!$ins->execute()) {
 $booking_id = $ins->insert_id;
 $ins->close();
 
-/* Optional: fetch parking title for nicer confirmation */
-$title = "Parking";
-$tStmt = $conn->prepare("SELECT title FROM parkings WHERE id = ?");
-$tStmt->bind_param("i", $parking_id);
-$tStmt->execute();
-$tRes = $tStmt->get_result();
-if ($tRes && $tRes->num_rows > 0) {
-    $title = $tRes->fetch_assoc()['title'];
-}
-$tStmt->close();
+/* Compute total using snapshot price */
+$days = (new DateTime($start_date))->diff(new DateTime($end_date))->days + 1;
+$totalPrice = $days * $price_day;
 ?>
 <!DOCTYPE html>
 <html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <title>Buchung bestätigt</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+<?php
+    $pageTitle = "Buchung bestätigt";
+    include("includes/header.php");
+?>
+
 <body class="bg-light">
 
 <div class="container py-5">
@@ -146,6 +153,10 @@ $tStmt->close();
 
             <p class="mb-1"><strong>Parkplatz:</strong> <?= htmlspecialchars($title) ?></p>
             <p class="mb-1"><strong>Zeitraum:</strong> <?= htmlspecialchars($start_date) ?> → <?= htmlspecialchars($end_date) ?></p>
+            <p class="mb-1"><strong>Tage:</strong> <?= (int)$days ?></p>
+            <p class="mb-1"><strong>Preis/Tag (fix):</strong> €<?= number_format($price_day, 2) ?></p>
+            <p class="mb-3"><strong>Gesamt:</strong> €<?= number_format($totalPrice, 2) ?></p>
+
             <p class="mb-3"><strong>Buchungsnummer:</strong> #<?= (int)$booking_id ?></p>
 
             <div class="d-flex gap-2">
@@ -156,7 +167,7 @@ $tStmt->close();
             <hr class="my-4">
 
             <small class="text-muted">
-                Tipp: Gebuchte Tage werden im Kalender jetzt als „gebucht“ angezeigt und sind nicht mehr auswählbar.
+                Hinweis: Der Preis/Tag wird bei Buchung gespeichert und ändert sich nicht, auch wenn der Parkplatzpreis später angepasst wird.
             </small>
         </div>
     </div>

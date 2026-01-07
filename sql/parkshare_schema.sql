@@ -40,6 +40,7 @@ CREATE TABLE bookings (
       user_id INT NOT NULL,
       booking_start DATE NOT NULL,
       booking_end DATE NOT NULL,
+      price_day DECIMAL(10,2) NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
       FOREIGN KEY (parking_id) REFERENCES parkings(id) ON DELETE CASCADE,
@@ -60,10 +61,7 @@ INSERT INTO parkings (owner_id, title, description, location, price, main_image,
 
 INSERT INTO parking_availability (parking_id, available_from, available_to) VALUES
     (1, '2026-01-01 12:00:00', '2026-06-30 20:00:00'),
-    (1, '2026-07-15 14:00:00', '2026-07-31 20:00:00'),
 
     (2, '2026-06-01 12:00:00', '2026-06-30 20:00:00'),
-    (2, '2026-07-15 14:00:00', '2026-07-31 20:00:00'),
 
-    (3, '2026-02-01 12:00:00', '2026-03-30 20:00:00'),
     (3, '2026-05-15 14:00:00', '2026-07-31 20:00:00');
