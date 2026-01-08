@@ -1,21 +1,51 @@
 <?php
 include("includes/db_connect.php");
 
-$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$id = isset($_GET['id']) ? (int)trim($_GET['id']) : 0;
 if ($id <= 0) die("Invalid parking id.");
 
-/* ---------- Helpers ---------- */
-function normalizeMonthYear($month, $year) {
-    if ($month < 1) { $month = 12; $year--; }
-    if ($month > 12) { $month = 1; $year++; }
-    return [$month, $year];
-}
 function isValidDate($d) {
-    return preg_match('/^\d{4}-\d{2}-\d{2}$/', $d);
+    return is_string($d) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d);
+}
+function normalizeMonthYear($m, $y) {
+    if ($m < 1) { $m = 12; $y--; }
+    if ($m > 12) { $m = 1; $y++; }
+    return [$m, $y];
 }
 
-/* ---------- Today ---------- */
 $today = date('Y-m-d');
+
+/* ---------- Selected range from URL (from search or calendar clicks) ---------- */
+$start_date = $_GET['start_date'] ?? null;
+$end_date   = $_GET['end_date'] ?? null;
+
+if ($start_date && !isValidDate($start_date)) $start_date = null;
+if ($end_date && !isValidDate($end_date)) $end_date = null;
+
+if ($start_date && $start_date < $today) { $start_date = null; $end_date = null; }
+if ($end_date && $end_date < $today) $end_date = null;
+
+if ($start_date && $end_date && $end_date < $start_date) {
+    [$start_date, $end_date] = [$end_date, $start_date];
+}
+
+/* ---------- Month/year logic ----------
+   - If month/year provided (arrows or day clicks), use them.
+   - Else (first load), if start_date exists, open that month.
+   - Else open current month.
+*/
+if (isset($_GET['month'], $_GET['year'])) {
+    $month = (int)$_GET['month'];
+    $year  = (int)$_GET['year'];
+} elseif ($start_date) {
+    $dt = new DateTime($start_date);
+    $month = (int)$dt->format('m');
+    $year  = (int)$dt->format('Y');
+} else {
+    $month = (int)date('m');
+    $year  = (int)date('Y');
+}
+[$month, $year] = normalizeMonthYear($month, $year);
 
 /* ---------- Parking ---------- */
 $stmt = $conn->prepare("
@@ -31,13 +61,13 @@ if ($res->num_rows === 0) die("Parking not found");
 $parking = $res->fetch_assoc();
 $stmt->close();
 
-/* ---------- Images (your logic kept) ---------- */
+/* ---------- Images ---------- */
 $imageDir = "uploads/parkings/" . $parking['id'] . "/";
 $images = glob($imageDir . "*.{jpg,jpeg,png}", GLOB_BRACE);
 sort($images);
 
-/* ---------- Availability ---------- */
-$availability = [];
+/* ---------- Availability (DATE or DATETIME compatible) ---------- */
+$availableDates = [];
 $availStmt = $conn->prepare("
     SELECT available_from, available_to
     FROM parking_availability
@@ -47,23 +77,16 @@ $availStmt->bind_param("i", $id);
 $availStmt->execute();
 $availRes = $availStmt->get_result();
 while ($row = $availRes->fetch_assoc()) {
-    $availability[] = $row;
+    $s = new DateTime(substr($row['available_from'], 0, 10));
+    $e = new DateTime(substr($row['available_to'], 0, 10));
+    while ($s <= $e) {
+        $availableDates[$s->format('Y-m-d')] = true;
+        $s->modify('+1 day');
+    }
 }
 $availStmt->close();
 
-/* ---------- Availability by DATE ---------- */
-$availableDates = [];
-foreach ($availability as $slot) {
-    // If availability table is DATE-only, substr is harmless; it also works if DATETIME
-    $start = new DateTime(substr($slot['available_from'], 0, 10));
-    $end   = new DateTime(substr($slot['available_to'], 0, 10));
-    while ($start <= $end) {
-        $availableDates[$start->format('Y-m-d')] = true;
-        $start->modify('+1 day');
-    }
-}
-
-/* ---------- Booked dates (NEW) ---------- */
+/* ---------- Booked dates (disable in calendar) ---------- */
 $bookedDates = [];
 $bookStmt = $conn->prepare("
     SELECT booking_start, booking_end
@@ -74,186 +97,234 @@ $bookStmt->bind_param("i", $id);
 $bookStmt->execute();
 $bookRes = $bookStmt->get_result();
 while ($b = $bookRes->fetch_assoc()) {
-    $bs = new DateTime($b['booking_start']);
-    $be = new DateTime($b['booking_end']);
-    while ($bs <= $be) {
-        $bookedDates[$bs->format('Y-m-d')] = true;
-        $bs->modify('+1 day');
+    $s = new DateTime($b['booking_start']);
+    $e = new DateTime($b['booking_end']);
+    while ($s <= $e) {
+        $bookedDates[$s->format('Y-m-d')] = true;
+        $s->modify('+1 day');
     }
 }
 $bookStmt->close();
 
-/* ---------- Calendar ---------- */
-$year  = isset($_GET['year']) ? (int)$_GET['year'] : date('Y');
-$month = isset($_GET['month']) ? (int)$_GET['month'] : date('m');
-[$month, $year] = normalizeMonthYear($month, $year);
-
-$firstDay = new DateTime("$year-$month-01");
-$daysInMonth = (int)$firstDay->format('t');
-$startWeekday = (int)$firstDay->format('N');
-
-/* ---------- Selected range ---------- */
-$start_date = $_GET['start_date'] ?? null;
-$end_date   = $_GET['end_date'] ?? null;
-
+/* ---------- Optional: reject ranges that include booked/unavailable ---------- */
 $range_error = '';
-
-if ($start_date && !isValidDate($start_date)) $start_date = null;
-if ($end_date && !isValidDate($end_date)) $end_date = null;
-
-if ($start_date && $start_date < $today) {
-    $start_date = null;
-    $end_date = null;
-}
-if ($end_date && $end_date < $today) {
-    $end_date = null;
-}
-
-if ($start_date && $end_date && $end_date < $start_date) {
-    [$start_date, $end_date] = [$end_date, $start_date];
-}
-
-/* ---------- NEW: reject ranges that include booked or unavailable days ---------- */
 if ($start_date && $end_date) {
-    $cursor = new DateTime($start_date);
-    $endObj = new DateTime($end_date);
-
-    while ($cursor <= $endObj) {
-        $dk = $cursor->format('Y-m-d');
-
-        // Block booked days
-        if (isset($bookedDates[$dk])) {
-            $range_error = "Selected range contains already booked dates. Please choose another range.";
-            $start_date = null;
-            $end_date = null;
-            break;
-        }
-
-        // (Recommended) Block days that are not available (not green)
+    $cur = new DateTime($start_date);
+    $end = new DateTime($end_date);
+    while ($cur <= $end) {
+        $dk = $cur->format('Y-m-d');
         if (!isset($availableDates[$dk])) {
-            $range_error = "Selected range contains unavailable dates. Please choose only available (green) dates.";
-            $start_date = null;
-            $end_date = null;
+            $range_error = "Selected range contains unavailable dates.";
+            $start_date = null; $end_date = null;
             break;
         }
-
-        $cursor->modify('+1 day');
+        if (isset($bookedDates[$dk])) {
+            $range_error = "Selected range contains already booked dates.";
+            $start_date = null; $end_date = null;
+            break;
+        }
+        $cur->modify('+1 day');
     }
 }
 
-/* ---------- Month navigation ---------- */
+/* ---------- Calendar math ---------- */
+$firstDay = new DateTime(sprintf('%04d-%02d-01', $year, $month));
+$daysInMonth = (int)$firstDay->format('t');
+$startWeekday = (int)$firstDay->format('N'); // 1=Mon..7=Sun
+
 [$pm, $py] = normalizeMonthYear($month - 1, $year);
 [$nm, $ny] = normalizeMonthYear($month + 1, $year);
+
+/* keep range in links */
+$keepRange = "";
+if ($start_date) $keepRange .= "&start_date=" . urlencode($start_date);
+if ($end_date)   $keepRange .= "&end_date=" . urlencode($end_date);
 ?>
 
 <!DOCTYPE html>
 <html lang="de">
-<?php
-    $pageTitle = htmlspecialchars($parking['title']);
-    include("includes/header.php");
-?>
+<?php include("includes/header.php"); ?>
 <style>
     .parking-img { width:100%; height:400px; object-fit:cover; border-radius:10px; }
 
-    .calendar { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
-    .calendar-day, .calendar-head {
-        border:1px solid #ddd; border-radius:8px; padding:8px; text-align:right;
+    /* Calendar sizing */
+    .cal td, .cal th { width:14.285%; vertical-align:top; padding:.35rem; }
+
+    /* Day pill */
+    .daybox{
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        height:44px;
+        border-radius:999px;
+        text-decoration:none;
+        font-weight:600;
+        border:1px solid transparent;
+        user-select:none;
     }
-    .calendar-head { background:#f8f9fa; font-weight:600; text-align:center; }
 
-    .available { background:#e8f5e9; }
-    .past { background:#f1f1f1; color:#999; }
+    /* States */
+    .day-disabled { opacity:.45; cursor:not-allowed; background:#f8f9fa; }
+    .day-available { background: rgba(25,135,84,.10); border-color: rgba(25,135,84,.25); }
+    .day-booked { background: rgba(220,53,69,.12); border-color: rgba(220,53,69,.25); }
 
-    /* NEW: booked days */
-    .booked { background:#ffeaea; border-color:#f3b5b5; color:#a33; }
-    .booked a { pointer-events:none; }
+    /* Range visualization (better!) */
+    .day-inrange{
+        background: rgba(13,110,253,.12);
+        border-color: rgba(13,110,253,.25);
+        border-radius: 0; /* makes it look like a continuous bar */
+    }
+    .day-range-start{
+        background:#0d6efd;
+        color:#fff;
+        border-color:#0d6efd;
+        border-top-left-radius:999px;
+        border-bottom-left-radius:999px;
+        border-top-right-radius:0;
+        border-bottom-right-radius:0;
+    }
+    .day-range-end{
+        background:#0d6efd;
+        color:#fff;
+        border-color:#0d6efd;
+        border-top-right-radius:999px;
+        border-bottom-right-radius:999px;
+        border-top-left-radius:0;
+        border-bottom-left-radius:0;
+    }
+    /* Single-day range (start=end) */
+    .day-range-single{
+        background:#0d6efd;
+        color:#fff;
+        border-color:#0d6efd;
+        border-radius:999px;
+    }
 
-    .in-range { background:#e7f1ff; }
-    .range-start, .range-end { background:#0d6efd; color:#fff; }
+    /* Hover */
+    a.daybox:hover { filter: brightness(0.98); }
 
-    .calendar-day a { text-decoration:none; color:inherit; display:block; height:100%; }
+    /* Legend dots */
+    .legend-dot{ display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:6px; vertical-align:middle; }
 </style>
-
 <body>
+
 <div class="container mt-4">
     <div class="row">
 
         <!-- LEFT -->
         <div class="col-md-7">
-
             <?php if ($images): ?>
                 <div id="carousel" class="carousel slide mb-4">
                     <div class="carousel-inner">
                         <?php foreach ($images as $i => $img): ?>
                             <div class="carousel-item <?= $i === 0 ? 'active' : '' ?>">
-                                <img src="<?= htmlspecialchars($img) ?>" class="parking-img">
+                                <img src="<?= htmlspecialchars($img) ?>" class="parking-img" alt="Parking image">
                             </div>
                         <?php endforeach; ?>
                     </div>
                 </div>
             <?php endif; ?>
 
-            <h5>Availability</h5>
+            <h5 class="mb-2">Availability</h5>
 
-            <?php if (!empty($range_error)): ?>
+            <?php if ($range_error): ?>
                 <div class="alert alert-danger"><?= htmlspecialchars($range_error) ?></div>
             <?php endif; ?>
 
-            <div class="d-flex justify-content-between mb-2">
-                <a href="?id=<?= $id ?>&month=<?= $pm ?>&year=<?= $py ?>">←</a>
-                <strong><?= $firstDay->format('F Y') ?></strong>
-                <a href="?id=<?= $id ?>&month=<?= $nm ?>&year=<?= $ny ?>">→</a>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <a class="btn btn-outline-secondary btn-sm"
+                   href="parking.php?id=<?= $id ?>&month=<?= $pm ?>&year=<?= $py ?><?= $keepRange ?>">←</a>
+
+                <strong><?= htmlspecialchars($firstDay->format('F Y')) ?></strong>
+
+                <a class="btn btn-outline-secondary btn-sm"
+                   href="parking.php?id=<?= $id ?>&month=<?= $nm ?>&year=<?= $ny ?><?= $keepRange ?>">→</a>
             </div>
 
-            <div class="calendar mb-3">
-                <?php foreach (['Mo','Di','Mi','Do','Fr','Sa','So'] as $d): ?>
-                    <div class="calendar-head"><?= $d ?></div>
-                <?php endforeach; ?>
+            <div class="table-responsive">
+                <table class="table table-bordered cal bg-white">
+                    <thead class="table-light">
+                    <tr class="text-center">
+                        <th>Mo</th><th>Di</th><th>Mi</th><th>Do</th><th>Fr</th><th>Sa</th><th>So</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <?php
+                        for ($i = 1; $i < $startWeekday; $i++) echo "<td></td>";
 
-                <?php for ($i=1;$i<$startWeekday;$i++): ?><div></div><?php endfor; ?>
+                        $col = $startWeekday;
+                        for ($day = 1; $day <= $daysInMonth; $day++, $col++) {
+                            $date = sprintf('%04d-%02d-%02d', $year, $month, $day);
 
-                <?php for ($day=1;$day<=$daysInMonth;$day++):
-                    $date = sprintf('%04d-%02d-%02d',$year,$month,$day);
+                            $isPast   = ($date < $today);
+                            $isAvail  = isset($availableDates[$date]);
+                            $isBooked = isset($bookedDates[$date]);
 
-                    $isPast   = $date < $today;
-                    $isAvail  = isset($availableDates[$date]);
-                    $isBooked = isset($bookedDates[$date]);
+                            $inRange = ($start_date && $end_date && $date >= $start_date && $date <= $end_date);
+                            $isStart = ($start_date && $date === $start_date);
+                            $isEnd   = ($end_date && $date === $end_date);
 
-                    $classes = [];
-                    if ($isAvail) $classes[]='available';
-                    if ($isPast) $classes[]='past';
-                    if ($isBooked) $classes[]='booked';
+                            $clickable = (!$isPast && $isAvail && !$isBooked);
 
-                    if ($start_date && $end_date && $date >= $start_date && $date <= $end_date) $classes[]='in-range';
-                    if ($date === $start_date) $classes[]='range-start';
-                    if ($date === $end_date) $classes[]='range-end';
+                            // include month/year in day links so view stays where user is
+                            if (!$start_date) {
+                                $url = "parking.php?id=$id&month=$month&year=$year&start_date=$date";
+                            } elseif (!$end_date) {
+                                $url = "parking.php?id=$id&month=$month&year=$year&start_date=$start_date&end_date=$date";
+                            } else {
+                                $url = "parking.php?id=$id&month=$month&year=$year&start_date=$date";
+                            }
 
-                    // Disable click if past OR booked OR not available
-                    if ($isPast || $isBooked || !$isAvail) {
-                        $url = null;
-                    } elseif (!$start_date) {
-                        $url = "?id=$id&month=$month&year=$year&start_date=$date";
-                    } elseif (!$end_date) {
-                        $url = "?id=$id&month=$month&year=$year&start_date=$start_date&end_date=$date";
-                    } else {
-                        $url = "?id=$id&month=$month&year=$year&start_date=$date";
-                    }
-                    ?>
-                    <div class="calendar-day <?= implode(' ',$classes) ?>">
-                        <?php if ($url): ?><a href="<?= $url ?>"><?= $day ?></a><?php else: ?><?= $day ?><?php endif; ?>
-                    </div>
-                <?php endfor; ?>
+                            // day class
+                            $cls = "daybox";
+
+                            if ($isPast || !$isAvail) {
+                                $cls .= " day-disabled";
+                            } elseif ($isBooked) {
+                                $cls .= " day-booked";
+                            } else {
+                                $cls .= " day-available";
+                            }
+
+                            // range styling (overrides visuals)
+                            if ($start_date && $end_date && $start_date === $end_date && $date === $start_date) {
+                                $cls = "daybox day-range-single";
+                            } else {
+                                if ($inRange) $cls .= " day-inrange";
+                                if ($isStart) $cls = "daybox day-range-start";
+                                if ($isEnd)   $cls = "daybox day-range-end";
+                            }
+
+                            echo "<td class='text-center'>";
+                            if ($clickable) {
+                                echo "<a class='".htmlspecialchars($cls)."' href='".htmlspecialchars($url)."'>$day</a>";
+                            } else {
+                                echo "<span class='".htmlspecialchars($cls)."'>$day</span>";
+                            }
+                            echo "</td>";
+
+                            if ($col % 7 === 0 && $day !== $daysInMonth) echo "</tr><tr>";
+                        }
+
+                        $endFill = (7 - (($col - 1) % 7)) % 7;
+                        for ($i = 0; $i < $endFill; $i++) echo "<td></td>";
+                        ?>
+                    </tr>
+                    </tbody>
+                </table>
             </div>
 
-            <small class="text-muted">
-                Grün = verfügbar, Rot = gebucht, Grau = nicht auswählbar.
-            </small>
-
+            <div class="d-flex flex-wrap gap-3 small text-muted mt-2">
+                <span><span class="legend-dot" style="background: rgba(25,135,84,.35)"></span> Verfügbar</span>
+                <span><span class="legend-dot" style="background: rgba(220,53,69,.35)"></span> Gebucht</span>
+                <span><span class="legend-dot" style="background: rgba(13,110,253,.35)"></span> Auswahl</span>
+                <span><span class="legend-dot" style="background: #e9ecef"></span> Deaktiviert</span>
+            </div>
         </div>
 
         <!-- RIGHT -->
         <div class="col-md-5">
-
             <h2><?= htmlspecialchars($parking['title']) ?></h2>
 
             <p class="text-muted">
@@ -261,7 +332,7 @@ if ($start_date && $end_date) {
             </p>
 
             <h4 class="text-primary">
-                €<?= number_format($parking['price'],2) ?> / day
+                €<?= number_format((float)$parking['price'], 2) ?> / day
             </h4>
 
             <?php if (!empty($parking['owner_name'])): ?>
@@ -277,7 +348,7 @@ if ($start_date && $end_date) {
 
             <?php if ($start_date && $end_date): ?>
                 <div class="alert alert-info">
-                    Selected: <strong><?= $start_date ?></strong> → <strong><?= $end_date ?></strong>
+                    Selected: <strong><?= htmlspecialchars($start_date) ?></strong> → <strong><?= htmlspecialchars($end_date) ?></strong>
                 </div>
 
                 <form method="POST" action="book.php">
@@ -285,20 +356,23 @@ if ($start_date && $end_date) {
 
                     <label>Start date</label>
                     <input type="date" name="booking_start" class="form-control mb-2"
-                           value="<?= $start_date ?>" min="<?= $today ?>" required>
+                           value="<?= htmlspecialchars($start_date) ?>"
+                           min="<?= htmlspecialchars($today) ?>" required>
 
                     <label>End date</label>
                     <input type="date" name="booking_end" class="form-control mb-2"
-                           value="<?= $end_date ?>" min="<?= $today ?>" required>
+                           value="<?= htmlspecialchars($end_date) ?>"
+                           min="<?= htmlspecialchars($today) ?>" required>
 
                     <button class="btn btn-primary w-100">Book now</button>
                 </form>
             <?php else: ?>
                 <p class="text-muted">Select start and end date in the calendar.</p>
             <?php endif; ?>
-
         </div>
+
     </div>
 </div>
+
 </body>
 </html>
