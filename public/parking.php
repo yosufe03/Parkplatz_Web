@@ -1,5 +1,9 @@
 <?php
 include("includes/db_connect.php");
+// start session early so we can read `$_SESSION['user_id']` before header include
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 $id = isset($_GET['id']) ? (int)trim($_GET['id']) : 0;
 if ($id <= 0) die("Invalid parking id.");
@@ -60,6 +64,41 @@ $res = $stmt->get_result();
 if ($res->num_rows === 0) die("Parking not found");
 $parking = $res->fetch_assoc();
 $stmt->close();
+
+/* ---------- Reviews (avg, list, user's review) ---------- */
+$avgRating = 0.0;
+$reviewCount = 0;
+$reviews = [];
+
+$revAvgStmt = $conn->prepare("SELECT AVG(rating) AS avg_rating, COUNT(*) AS review_count FROM parking_reviews WHERE parking_id = ?");
+$revAvgStmt->bind_param("i", $id);
+$revAvgStmt->execute();
+$revAvgRes = $revAvgStmt->get_result();
+if ($row = $revAvgRes->fetch_assoc()) {
+    $avgRating = $row['avg_rating'] !== null ? (float)$row['avg_rating'] : 0.0;
+    $reviewCount = (int)$row['review_count'];
+}
+$revAvgStmt->close();
+
+$revStmt = $conn->prepare("SELECT r.*, u.username FROM parking_reviews r JOIN users u ON r.user_id = u.id WHERE r.parking_id = ? ORDER BY r.created_at DESC LIMIT 20");
+$revStmt->bind_param("i", $id);
+$revStmt->execute();
+$revRes = $revStmt->get_result();
+while ($r = $revRes->fetch_assoc()) {
+    $reviews[] = $r;
+}
+$revStmt->close();
+
+$userReview = null;
+if (isset($_SESSION['user_id'])) {
+    $uid = (int)$_SESSION['user_id'];
+    $ur = $conn->prepare("SELECT rating, comment FROM parking_reviews WHERE parking_id = ? AND user_id = ?");
+    $ur->bind_param("ii", $id, $uid);
+    $ur->execute();
+    $urRes = $ur->get_result();
+    if ($urRes && $urRes->num_rows > 0) $userReview = $urRes->fetch_assoc();
+    $ur->close();
+}
 
 /* ---------- Images ---------- */
 $imageDir = "uploads/parkings/" . $parking['id'] . "/";
@@ -339,6 +378,17 @@ if ($end_date)   $keepRange .= "&end_date=" . urlencode($end_date);
                 <p><strong>Owner:</strong> <?= htmlspecialchars($parking['owner_name']) ?></p>
             <?php endif; ?>
 
+            <!-- Ratings summary -->
+            <div class="mb-2">
+                <strong>Rating:</strong>
+                <?php if ($reviewCount > 0): ?>
+                    <span class="text-warning">★ <?= number_format($avgRating, 1) ?></span>
+                    <small class="text-muted">(<?= $reviewCount ?>)</small>
+                <?php else: ?>
+                    <small class="text-muted">No ratings yet</small>
+                <?php endif; ?>
+            </div>
+
             <hr>
 
             <h5>Description</h5>
@@ -369,6 +419,57 @@ if ($end_date)   $keepRange .= "&end_date=" . urlencode($end_date);
             <?php else: ?>
                 <p class="text-muted">Select start and end date in the calendar.</p>
             <?php endif; ?>
+
+            <hr>
+
+            <!-- Reviews list -->
+            <div class="mt-3">
+                <h5>Reviews</h5>
+                <?php if (empty($reviews)): ?>
+                    <p class="text-muted">No reviews yet. Be the first to review this parking.</p>
+                <?php else: ?>
+                    <?php foreach ($reviews as $r): ?>
+                        <div class="border rounded p-2 mb-2">
+                            <div class="d-flex justify-content-between">
+                                <div><strong><?= htmlspecialchars($r['username']) ?></strong></div>
+                                <div class="text-warning">★ <?= (int)$r['rating'] ?></div>
+                            </div>
+                            <?php if (!empty($r['comment'])): ?>
+                                <div class="mt-1"><?= nl2br(htmlspecialchars($r['comment'])) ?></div>
+                            <?php endif; ?>
+                            <small class="text-muted"><?= htmlspecialchars($r['created_at']) ?></small>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+            <!-- Review form (only for logged-in users) -->
+            <div class="mt-3">
+                <h6>Add / Update your review</h6>
+                <?php if (!isset($_SESSION['user_id'])): ?>
+                    <p class="text-muted">Please <a href="login.php">login</a> to leave a review.</p>
+                <?php else: ?>
+                    <form method="POST" action="review_submit.php">
+                        <input type="hidden" name="parking_id" value="<?= $id ?>">
+
+                        <div class="mb-2">
+                            <label class="form-label">Rating</label>
+                            <select name="rating" class="form-select" required>
+                                <?php for ($s=1;$s<=5;$s++): ?>
+                                    <option value="<?= $s ?>" <?= ($userReview && (int)$userReview['rating'] === $s) ? 'selected' : '' ?>><?= $s ?> ★</option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label">Comment (optional)</label>
+                            <textarea name="comment" class="form-control" rows="3" maxlength="500"><?= $userReview ? htmlspecialchars($userReview['comment']) : '' ?></textarea>
+                        </div>
+
+                        <button class="btn btn-outline-primary">Submit review</button>
+                    </form>
+                <?php endif; ?>
+            </div>
         </div>
 
     </div>

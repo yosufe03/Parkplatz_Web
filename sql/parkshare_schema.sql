@@ -47,6 +47,19 @@ CREATE TABLE bookings (
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE parking_reviews (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  parking_id INT NOT NULL,
+  user_id INT NOT NULL,
+  rating TINYINT NOT NULL, -- 1..5
+  comment VARCHAR(500) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (parking_id) REFERENCES parkings(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY ux_parking_user (parking_id, user_id)
+);
+
 -- Sample Users (password: "password")
 INSERT INTO users (username, email, password_hash, role) VALUES
      ('admin', 'admin@parkshare.local', '$2y$10$b5aZ4Cqos0HZg3CCW.MmyOn0uIdrUc09llz3pUEaINHvj10JB.siK', 'admin'),

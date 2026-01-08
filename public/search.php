@@ -102,6 +102,22 @@ if (empty($errors)) {
         $parkings[] = $row;
     }
     $stmt->close();
+
+    // Fetch average ratings for results (single query to avoid N+1)
+    if (!empty($parkings)) {
+        $ids = array_map(function($p){ return (int)$p['id']; }, $parkings);
+        $in = implode(',', $ids);
+        $ratings = [];
+        $revSql = "SELECT parking_id, AVG(rating) AS avg_rating, COUNT(*) AS review_count FROM parking_reviews WHERE parking_id IN ($in) GROUP BY parking_id";
+        if ($revStmt = $conn->prepare($revSql)) {
+            $revStmt->execute();
+            $revRes = $revStmt->get_result();
+            while ($r = $revRes->fetch_assoc()) {
+                $ratings[(int)$r['parking_id']] = $r;
+            }
+            $revStmt->close();
+        }
+    }
 }
 ?>
 
@@ -185,6 +201,18 @@ include("includes/header.php");
                                 </p>
                                 <p><strong>Ort:</strong> <?= htmlspecialchars($row['location']) ?></p>
                                 <p><strong>Preis:</strong> €<?= number_format((float)$row['price'], 2) ?> / Tag</p>
+                                <?php
+                                    $r = $ratings[$parkingId] ?? null;
+                                ?>
+                                <p>
+                                    <strong>Rating:</strong>
+                                    <?php if ($r): ?>
+                                        <span class="text-warning">★ <?= number_format((float)$r['avg_rating'], 1) ?></span>
+                                        <small class="text-muted">(<?= (int)$r['review_count'] ?>)</small>
+                                    <?php else: ?>
+                                        <small class="text-muted">No ratings yet</small>
+                                    <?php endif; ?>
+                                </p>
                             </div>
                         </div>
                     </a>
