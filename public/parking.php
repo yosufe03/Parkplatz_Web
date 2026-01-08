@@ -98,6 +98,14 @@ if (isset($_SESSION['user_id'])) {
     $urRes = $ur->get_result();
     if ($urRes && $urRes->num_rows > 0) $userReview = $urRes->fetch_assoc();
     $ur->close();
+
+    // Favorite status
+    $favStmt = $conn->prepare("SELECT id FROM favorites WHERE parking_id = ? AND user_id = ? LIMIT 1");
+    $favStmt->bind_param("ii", $id, $uid);
+    $favStmt->execute();
+    $favRes = $favStmt->get_result();
+    $isFavorite = ($favRes && $favRes->num_rows > 0);
+    $favStmt->close();
 }
 
 /* ---------- Images ---------- */
@@ -376,6 +384,19 @@ if ($end_date)   $keepRange .= "&end_date=" . urlencode($end_date);
 
             <?php if (!empty($parking['owner_name'])): ?>
                 <p><strong>Owner:</strong> <?= htmlspecialchars($parking['owner_name']) ?></p>
+            <?php endif; ?>
+
+            <?php if (isset($_SESSION['user_id'])): ?>
+                <form method="POST" action="favorite_toggle.php" class="mb-2">
+                    <input type="hidden" name="parking_id" value="<?= $id ?>">
+                    <?php if ($isFavorite): ?>
+                        <input type="hidden" name="action" value="remove">
+                        <button class="btn btn-sm btn-outline-danger">♥ Entfernen</button>
+                    <?php else: ?>
+                        <input type="hidden" name="action" value="add">
+                        <button class="btn btn-sm btn-outline-primary">♡ Favorisieren</button>
+                    <?php endif; ?>
+                </form>
             <?php endif; ?>
 
             <!-- Ratings summary -->

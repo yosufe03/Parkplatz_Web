@@ -117,6 +117,21 @@ if (empty($errors)) {
             }
             $revStmt->close();
         }
+        // Favorites for current user (single query)
+        $favorites = [];
+        if (isset($_SESSION['user_id'])) {
+            $uid = (int)$_SESSION['user_id'];
+            $favSql = "SELECT parking_id FROM favorites WHERE user_id = ? AND parking_id IN ($in)";
+            if ($favStmt = $conn->prepare($favSql)) {
+                $favStmt->bind_param('i', $uid);
+                $favStmt->execute();
+                $favRes = $favStmt->get_result();
+                while ($f = $favRes->fetch_assoc()) {
+                    $favorites[(int)$f['parking_id']] = true;
+                }
+                $favStmt->close();
+            }
+        }
     }
 }
 ?>
@@ -203,6 +218,7 @@ include("includes/header.php");
                                 <p><strong>Preis:</strong> €<?= number_format((float)$row['price'], 2) ?> / Tag</p>
                                 <?php
                                     $r = $ratings[$parkingId] ?? null;
+                                    $isFav = isset($favorites[$parkingId]);
                                 ?>
                                 <p>
                                     <strong>Rating:</strong>
@@ -213,6 +229,18 @@ include("includes/header.php");
                                         <small class="text-muted">No ratings yet</small>
                                     <?php endif; ?>
                                 </p>
+                                <?php if (isset($_SESSION['user_id'])): ?>
+                                    <form method="POST" action="favorite_toggle.php" class="mt-2">
+                                        <input type="hidden" name="parking_id" value="<?= $parkingId ?>">
+                                        <?php if ($isFav): ?>
+                                            <input type="hidden" name="action" value="remove">
+                                            <button class="btn btn-sm btn-outline-danger">♥</button>
+                                        <?php else: ?>
+                                            <input type="hidden" name="action" value="add">
+                                            <button class="btn btn-sm btn-outline-primary">♡</button>
+                                        <?php endif; ?>
+                                    </form>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </a>
