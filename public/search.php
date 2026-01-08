@@ -4,19 +4,45 @@ include("includes/db_connect.php");
 
 $today = date('Y-m-d');
 
-$location = trim($_GET['location'] ?? '');
+$district_id = isset($_GET['district_id']) ? (int)$_GET['district_id'] : 0;
+$neighborhood_id = isset($_GET['neighborhood_id']) ? (int)$_GET['neighborhood_id'] : 0;
 $from = $_GET['from'] ?? '';
 $to   = $_GET['to'] ?? '';
 
+// active filter flags (define early so we can use them to load names)
+$useDistrict = ($district_id > 0);
+$useNeighborhood = ($neighborhood_id > 0);
+
 function isValidDate($d) {
     return is_string($d) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d);
+}
+
+// Load selected district/neighborhood names for display
+$selectedDistrictName = null;
+$selectedNeighborhoodName = null;
+if ($useDistrict) {
+    $dstmt = $conn->prepare("SELECT name FROM districts WHERE id = ? LIMIT 1");
+    $dstmt->bind_param('i', $district_id);
+    $dstmt->execute();
+    $dres = $dstmt->get_result();
+    if ($dr = $dres->fetch_assoc()) $selectedDistrictName = $dr['name'];
+    $dstmt->close();
+}
+if ($useNeighborhood) {
+    $nstmt = $conn->prepare("SELECT name FROM neighborhoods WHERE id = ? LIMIT 1");
+    $nstmt->bind_param('i', $neighborhood_id);
+    $nstmt->execute();
+    $nres = $nstmt->get_result();
+    if ($nr = $nres->fetch_assoc()) $selectedNeighborhoodName = $nr['name'];
+    $nstmt->close();
 }
 
 $errors = [];
 $parkings = [];
 
 /* ---------- Decide active filters ---------- */
-$useLocation = ($location !== '');
+$useDistrict = ($district_id > 0);
+$useNeighborhood = ($neighborhood_id > 0);
 $useDates = (isValidDate($from) && isValidDate($to) && $from !== '' && $to !== '');
 
 /* ---------- Validate dates if used ---------- */
@@ -76,10 +102,15 @@ if (empty($errors)) {
         ";
     }
 
-    if ($useLocation) {
-        $sql .= " AND p.location LIKE ? ";
-        $types .= "s";
-        $params[] = "%" . $location . "%";
+    if ($useDistrict) {
+        $sql .= " AND p.district_id = ? ";
+        $types .= "i";
+        $params[] = $district_id;
+    }
+    if ($useNeighborhood) {
+        $sql .= " AND p.neighborhood_id = ? ";
+        $types .= "i";
+        $params[] = $neighborhood_id;
     }
 
     $sql .= " ORDER BY p.id DESC ";
@@ -160,9 +191,9 @@ include("includes/header.php");
     <?php else: ?>
 
         <div class="alert alert-info mt-3">
-            <strong>Ort:</strong> <?= htmlspecialchars($useLocation ? $location : 'Alle') ?> |
-            <strong>Zeitraum:</strong>
-            <?= $useDates ? htmlspecialchars("$from → $to") : 'Alle' ?> |
+            <strong>Distrikt:</strong> <?= $useDistrict ? htmlspecialchars($selectedDistrictName ?? (string)$district_id) : 'Alle' ?> |
+            <strong>Stadtteil:</strong> <?= $useNeighborhood ? htmlspecialchars($selectedNeighborhoodName ?? (string)$neighborhood_id) : 'Alle' ?> |
+            <strong>Zeitraum:</strong> <?= $useDates ? htmlspecialchars("$from → $to") : 'Alle' ?> |
             <strong>Treffer:</strong> <?= count($parkings) ?>
         </div>
 
@@ -214,7 +245,30 @@ include("includes/header.php");
                                 <p class="card-text">
                                     <?= htmlspecialchars(mb_strimwidth($row['description'], 0, 100, "...")) ?>
                                 </p>
-                                <p><strong>Ort:</strong> <?= htmlspecialchars($row['location']) ?></p>
+                                <?php
+                                    $districtName = '';
+                                    $neighborhoodName = '';
+                                    if (!empty($row['district_id'])) {
+                                        $dq = $conn->prepare("SELECT name FROM districts WHERE id = ? LIMIT 1");
+                                        $dqid = (int)$row['district_id'];
+                                        $dq->bind_param('i', $dqid);
+                                        $dq->execute();
+                                        $dres = $dq->get_result();
+                                        if ($dr = $dres->fetch_assoc()) $districtName = $dr['name'];
+                                        $dq->close();
+                                    }
+                                    if (!empty($row['neighborhood_id'])) {
+                                        $nq = $conn->prepare("SELECT name FROM neighborhoods WHERE id = ? LIMIT 1");
+                                        $nqid = (int)$row['neighborhood_id'];
+                                        $nq->bind_param('i', $nqid);
+                                        $nq->execute();
+                                        $nres = $nq->get_result();
+                                        if ($nr = $nres->fetch_assoc()) $neighborhoodName = $nr['name'];
+                                        $nq->close();
+                                    }
+                                ?>
+                                <p><strong>Distrikt:</strong> <?= htmlspecialchars($districtName ?: '—') ?> <br>
+                                <strong>Stadtteil:</strong> <?= htmlspecialchars($neighborhoodName ?: '—') ?></p>
                                 <p><strong>Preis:</strong> €<?= number_format((float)$row['price'], 2) ?> / Tag</p>
                                 <?php
                                     $r = $ratings[$parkingId] ?? null;

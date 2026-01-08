@@ -374,8 +374,31 @@ if ($end_date)   $keepRange .= "&end_date=" . urlencode($end_date);
         <div class="col-md-5">
             <h2><?= htmlspecialchars($parking['title']) ?></h2>
 
+            <?php
+                $districtName = '';
+                $neighborhoodName = '';
+                if (!empty($parking['district_id'])) {
+                    $dq = $conn->prepare("SELECT name FROM districts WHERE id = ? LIMIT 1");
+                    $did = (int)$parking['district_id'];
+                    $dq->bind_param('i', $did);
+                    $dq->execute();
+                    $dres = $dq->get_result();
+                    if ($dr = $dres->fetch_assoc()) $districtName = $dr['name'];
+                    $dq->close();
+                }
+                if (!empty($parking['neighborhood_id'])) {
+                    $nq = $conn->prepare("SELECT name FROM neighborhoods WHERE id = ? LIMIT 1");
+                    $nid = (int)$parking['neighborhood_id'];
+                    $nq->bind_param('i', $nid);
+                    $nq->execute();
+                    $nres = $nq->get_result();
+                    if ($nr = $nres->fetch_assoc()) $neighborhoodName = $nr['name'];
+                    $nq->close();
+                }
+            ?>
             <p class="text-muted">
-                Location: <strong><?= htmlspecialchars($parking['location']) ?></strong>
+                <strong>Distrikt:</strong> <?= htmlspecialchars($districtName ?: '—') ?> <br>
+                <strong>Stadtteil:</strong> <?= htmlspecialchars($neighborhoodName ?: '—') ?>
             </p>
 
             <h4 class="text-primary">

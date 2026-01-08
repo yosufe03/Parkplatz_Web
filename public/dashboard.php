@@ -43,6 +43,7 @@ include("includes/header.php");
             <?php if ($isAdmin): ?>
                 <a href="pending_parkings.php" class="btn btn-warning w-100 mb-3">Parkplätze freigeben</a>
                 <a href="all_parkings.php" class="btn btn-primary w-100 mb-3">Alle Parkplätze anzeigen</a>
+                <a href="areas_manage.php" class="btn btn-outline-primary w-100 mb-3">Gebiete verwalten</a>
                 <a href="user_manage.php" class="btn btn-danger w-100 mb-3">User moderieren</a>
             <?php endif; ?>
         </div>
@@ -75,7 +76,7 @@ include("includes/header.php");
         while ($row = $result->fetch_assoc()):
             ?>
             <a href="parking_edit.php?id=<?= $row['id'] ?>" class="list-group-item list-group-item-action">
-                <?= htmlspecialchars($row['title']) ?> — <?= htmlspecialchars($row['location']) ?>
+                <?= htmlspecialchars($row['title']) ?>
 
                 <?php if ($isAdmin): ?>
                     <small class="text-muted"> (Besitzer: <?= htmlspecialchars($row['owner_name'] ?? 'N/A') ?>)</small>

@@ -57,7 +57,30 @@ $result = $stmt->get_result();
                     <div class="card-body">
                         <h5 class="card-title"><?= htmlspecialchars($row['title']) ?></h5>
                         <p class="card-text"><?= htmlspecialchars(mb_strimwidth($row['description'], 0, 80, "...")) ?></p>
-                        <p><strong>Location:</strong> <?= htmlspecialchars($row['location']) ?></p>
+                        <?php
+                            $districtName = '';
+                            $neighborhoodName = '';
+                            if (!empty($row['district_id'])) {
+                                $dq = $conn->prepare("SELECT name FROM districts WHERE id = ? LIMIT 1");
+                                $did = (int)$row['district_id'];
+                                $dq->bind_param('i', $did);
+                                $dq->execute();
+                                $dres = $dq->get_result();
+                                if ($dr = $dres->fetch_assoc()) $districtName = $dr['name'];
+                                $dq->close();
+                            }
+                            if (!empty($row['neighborhood_id'])) {
+                                $nq = $conn->prepare("SELECT name FROM neighborhoods WHERE id = ? LIMIT 1");
+                                $nid = (int)$row['neighborhood_id'];
+                                $nq->bind_param('i', $nid);
+                                $nq->execute();
+                                $nres = $nq->get_result();
+                                if ($nr = $nres->fetch_assoc()) $neighborhoodName = $nr['name'];
+                                $nq->close();
+                            }
+                        ?>
+                        <p><strong>Distrikt:</strong> <?= htmlspecialchars($districtName ?: '—') ?> <br>
+                        <strong>Stadtteil:</strong> <?= htmlspecialchars($neighborhoodName ?: '—') ?></p>
                         <p><strong>Price:</strong> €<?= number_format($row['price'], 2) ?></p>
                         <p><strong>Status:</strong>
                             <?php

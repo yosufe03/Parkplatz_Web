@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
 }
 
 // Sorting & filtering
-$allowedSort = ['title','location','price','created_at','modified_at'];
+$allowedSort = ['title','price','created_at','modified_at'];
 $sort = $_GET['sort'] ?? 'id';
 $order = $_GET['order'] ?? 'DESC';
 $order = strtoupper($order) === 'ASC' ? 'ASC' : 'DESC';
@@ -58,12 +58,7 @@ $filters = [];
 $params = [];
 $types = '';
 
-// Location filter
-if (!empty($_GET['location'])) {
-    $filters[] = "p.location LIKE ?";
-    $params[] = "%" . $_GET['location'] . "%";
-    $types .= 's';
-}
+// (location removed) -- filters now include status and owner only
 
 // Status filter
 if (!empty($_GET['status'])) {
@@ -111,10 +106,7 @@ $result = $stmt->get_result();
 
     <!-- Filters -->
     <form method="GET" class="row g-3 mb-4 justify-content-center">
-        <!-- Location -->
-        <div class="col-md-3">
-            <input type="text" name="location" class="form-control" placeholder="Ort filtern" value="<?= htmlspecialchars($_GET['location'] ?? '') ?>">
-        </div>
+        <!-- Distrikt / Stadtteil filters could be added here later -->
 
         <!-- Status -->
         <div class="col-md-2">
@@ -141,7 +133,8 @@ $result = $stmt->get_result();
         <thead class="table-dark text-center">
         <tr>
             <th><a href="?<?= http_build_query(array_merge($_GET, ['sort'=>'title','order'=>toggleOrder($sort,$order,'title')])) ?>" class="text-white text-decoration-none">Titel</a></th>
-            <th><a href="?<?= http_build_query(array_merge($_GET, ['sort'=>'location','order'=>toggleOrder($sort,$order,'location')])) ?>" class="text-white text-decoration-none">Ort</a></th>
+            <th>Distrikt</th>
+            <th>Stadtteil</th>
             <th><a href="?<?= http_build_query(array_merge($_GET, ['sort'=>'price','order'=>toggleOrder($sort,$order,'price')])) ?>" class="text-white text-decoration-none">Preis</a></th>
             <th>Besitzer</th>
             <th><a href="?<?= http_build_query(array_merge($_GET, ['sort'=>'created_at','order'=>toggleOrder($sort,$order,'created_at')])) ?>" class="text-white text-decoration-none">Erstellt am</a></th>
@@ -154,7 +147,30 @@ $result = $stmt->get_result();
         <?php while($row = $result->fetch_assoc()): ?>
             <tr>
                 <td><?= htmlspecialchars($row['title']) ?></td>
-                <td><?= htmlspecialchars($row['location']) ?></td>
+                <?php
+                    $districtName = '';
+                    $neighborhoodName = '';
+                    if (!empty($row['district_id'])) {
+                        $dq = $conn->prepare("SELECT name FROM districts WHERE id = ? LIMIT 1");
+                        $did = (int)$row['district_id'];
+                        $dq->bind_param('i', $did);
+                        $dq->execute();
+                        $dres = $dq->get_result();
+                        if ($dr = $dres->fetch_assoc()) $districtName = $dr['name'];
+                        $dq->close();
+                    }
+                    if (!empty($row['neighborhood_id'])) {
+                        $nq = $conn->prepare("SELECT name FROM neighborhoods WHERE id = ? LIMIT 1");
+                        $nid = (int)$row['neighborhood_id'];
+                        $nq->bind_param('i', $nid);
+                        $nq->execute();
+                        $nres = $nq->get_result();
+                        if ($nr = $nres->fetch_assoc()) $neighborhoodName = $nr['name'];
+                        $nq->close();
+                    }
+                ?>
+                <td><?= htmlspecialchars($districtName ?: '—') ?></td>
+                <td><?= htmlspecialchars($neighborhoodName ?: '—') ?></td>
                 <td>€<?= number_format($row['price'],2) ?></td>
                 <td><?= htmlspecialchars($row['owner_name'] ?? 'N/A') ?></td>
                 <td><?= htmlspecialchars($row['created_at']) ?></td>

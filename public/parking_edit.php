@@ -51,6 +51,25 @@ if ($result->num_rows === 0) {
 $parking = $result->fetch_assoc();
 $stmt->close();
 
+// Load districts and neighborhoods for selects
+$districts = [];
+$neighborhoods = [];
+$dstmt = $conn->prepare("SELECT * FROM districts ORDER BY name ASC");
+if ($dstmt) {
+    $dstmt->execute();
+    $dres = $dstmt->get_result();
+    while ($d = $dres->fetch_assoc()) $districts[] = $d;
+    $dstmt->close();
+}
+
+$nstmt = $conn->prepare("SELECT * FROM neighborhoods ORDER BY name ASC");
+if ($nstmt) {
+    $nstmt->execute();
+    $nres = $nstmt->get_result();
+    while ($n = $nres->fetch_assoc()) $neighborhoods[] = $n;
+    $nstmt->close();
+}
+
 /* ---------- NEW: Fetch current availability (single row) ---------- */
 $avail_from = "";
 $avail_to = "";
@@ -103,8 +122,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Collect fields
     $title = $_POST['title'] ?? '';
     $description = $_POST['description'] ?? '';
-    $location = $_POST['location'] ?? '';
     $price = $_POST['price'] ?? '';
+    $district_id = isset($_POST['district_id']) && (int)$_POST['district_id'] > 0 ? (int)$_POST['district_id'] : null;
+    $neighborhood_id = isset($_POST['neighborhood_id']) && (int)$_POST['neighborhood_id'] > 0 ? (int)$_POST['neighborhood_id'] : null;
 
     /* ---------- NEW: Collect availability (DATE only) ---------- */
     $avail_from_post = $_POST['available_from'] ?? '';
@@ -121,26 +141,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         die("Availability end date must be after start date.");
     }
 
+    // Require district and neighborhood
+    if ($district_id === null || $neighborhood_id === null) {
+        die("Bitte Distrikt und Stadtteil auswählen.");
+    }
+
+    // Validate neighborhood belongs to district
+    $chk = $conn->prepare("SELECT district_id FROM neighborhoods WHERE id = ? LIMIT 1");
+    if ($chk) {
+        $chk->bind_param('i', $neighborhood_id);
+        $chk->execute();
+        $cres = $chk->get_result();
+        if ($cr = $cres->fetch_assoc()) {
+            if ((int)$cr['district_id'] !== (int)$district_id) {
+                die("Gewählter Stadtteil gehört nicht zum ausgewählten Distrikt.");
+            }
+        } else {
+            die("Ungültiger Stadtteil.");
+        }
+        $chk->close();
+    }
+
     // Admin can also edit owner_id and status
     if ($isAdmin) {
         $ownerId = (int)($_POST['owner_id'] ?? 0);
         $status = $_POST['status'] ?? 'pending';
 
-        $stmtUpdate = $conn->prepare("
+        $stmtUpdate = $conn->prepare(" 
             UPDATE parkings
-            SET title=?, description=?, location=?, price=?, owner_id=?, status=?
+            SET title=?, description=?, price=?, owner_id=?, status=?, district_id=?, neighborhood_id=?
             WHERE id=?
         ");
         $priceFloat = (float)$price;
-        $stmtUpdate->bind_param("sssdisi", $title, $description, $location, $priceFloat, $ownerId, $status, $parkingId);
+        $dvar = $district_id !== null ? $district_id : 0;
+        $nvar = $neighborhood_id !== null ? $neighborhood_id : 0;
+        $stmtUpdate->bind_param("ssdisiii", $title, $description, $priceFloat, $ownerId, $status, $dvar, $nvar, $parkingId);
     } else {
-        $stmtUpdate = $conn->prepare("
+        $stmtUpdate = $conn->prepare(" 
             UPDATE parkings
-            SET title=?, description=?, location=?, price=?
+            SET title=?, description=?, price=?, district_id=?, neighborhood_id=?
             WHERE id=? AND owner_id=?
         ");
         $priceFloat = (float)$price;
-        $stmtUpdate->bind_param("sssdii", $title, $description, $location, $priceFloat, $parkingId, $userId);
+        $dvar = $district_id !== null ? $district_id : 0;
+        $nvar = $neighborhood_id !== null ? $neighborhood_id : 0;
+        $stmtUpdate->bind_param("sssdiiii", $title, $description, $priceFloat, $dvar, $nvar, $parkingId, $userId);
     }
     $stmtUpdate->execute();
     $stmtUpdate->close();
@@ -229,14 +274,31 @@ include("includes/header.php");
             <textarea name="description" class="form-control" rows="4" required><?= htmlspecialchars($parking['description']) ?></textarea>
         </div>
 
-        <div class="mb-3">
-            <label class="form-label">Ort</label>
-            <input type="text" name="location" class="form-control" value="<?= htmlspecialchars($parking['location']) ?>" required>
-        </div>
+        <!-- location removed: use Distrikt / Stadtteil selects -->
 
         <div class="mb-3">
             <label class="form-label">Preis (€ pro Tag)</label>
             <input type="number" step="0.01" name="price" class="form-control" value="<?= htmlspecialchars($parking['price']) ?>" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Distrikt</label>
+            <select name="district_id" class="form-select" required>
+                <option value="">-- auswählen --</option>
+                <?php foreach ($districts as $d): ?>
+                    <option value="<?= (int)$d['id'] ?>" <?= (isset($parking['district_id']) && $parking['district_id'] == $d['id']) ? 'selected' : '' ?>><?= htmlspecialchars($d['name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Stadtteil</label>
+            <select name="neighborhood_id" class="form-select" required>
+                <option value="">-- auswählen --</option>
+                <?php foreach ($neighborhoods as $n): ?>
+                    <option value="<?= (int)$n['id'] ?>" <?= (isset($parking['neighborhood_id']) && $parking['neighborhood_id'] == $n['id']) ? 'selected' : '' ?>><?= htmlspecialchars($n['name']) ?> (<?= htmlspecialchars($n['district_id']) ?>)</option>
+                <?php endforeach; ?>
+            </select>
         </div>
 
         <!-- NEW: Availability (single, date only) -->
