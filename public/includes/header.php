@@ -5,6 +5,23 @@ if (session_status() === PHP_SESSION_NONE) {
 
 $isLoggedIn = isset($_SESSION['user_id']);
 $username = $isLoggedIn ? $_SESSION['username'] : '';
+
+// Check if logged-in user is still active
+if ($isLoggedIn && isset($conn)) {
+    $userId = (int)$_SESSION['user_id'];
+    $stmt = $conn->prepare("SELECT active FROM users WHERE id = ? LIMIT 1");
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $activeCheckResult = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    // If user is locked, log them out
+    if (!$activeCheckResult || !$activeCheckResult['active']) {
+        session_destroy();
+        header("Location: login.php?locked=1");
+        exit;
+    }
+}
 ?>
 <head>
     <meta charset="UTF-8">

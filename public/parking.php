@@ -65,6 +65,13 @@ if ($res->num_rows === 0) die("Parking not found");
 $parking = $res->fetch_assoc();
 $stmt->close();
 
+// Check if user is allowed to view this parking
+$isOwner = isset($_SESSION['user_id']) && $parking['owner_id'] == $_SESSION['user_id'];
+$isAdmin = isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
+if ($parking['status'] === 'rejected' && !$isOwner && !$isAdmin) {
+    die("Parkplatz nicht gefunden oder keine Berechtigung.");
+}
+
 /* ---------- Reviews (avg, list, user's review) ---------- */
 $avgRating = 0.0;
 $reviewCount = 0;

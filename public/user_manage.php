@@ -15,32 +15,43 @@ $stmtUser->bind_param("i", $userId);
 $stmtUser->execute();
 $resultUser = $stmtUser->get_result();
 $currentUser = $resultUser->fetch_assoc();
+$stmtUser->close();
 
-if ($currentUser['role'] !== 'admin') {
+if (!$currentUser || $currentUser['role'] !== 'admin') {
     die("Zugriff verweigert!");
 }
 
-// Benutzeraktionen
+// Benutzeraktionen BEFORE anything else
 if (isset($_GET['action'], $_GET['id'])) {
     $id = intval($_GET['id']);
     $action = $_GET['action'];
 
     if ($action === "sperren") {
+        // Lock user
         $stmt = $conn->prepare("UPDATE users SET active = 0 WHERE id=?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
+        $stmt->close();
+
+        // Reject all parkings for this user
+        $stmt = $conn->prepare("UPDATE parkings SET status = 'rejected' WHERE owner_id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $stmt->close();
     }
 
     if ($action === "aktivieren") {
         $stmt = $conn->prepare("UPDATE users SET active = 1 WHERE id=?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
+        $stmt->close();
     }
 
     if ($action === "loeschen") {
         $stmt = $conn->prepare("DELETE FROM users WHERE id=?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
+        $stmt->close();
     }
 
     header("Location: user_manage.php");
@@ -59,7 +70,6 @@ $pageTitle = "Benutzerverwaltung";
 include("includes/header.php");
 ?>
 
-<body>
 <div class="container mt-5">
     <h1 class="text-center">Benutzer moderieren</h1>
     <p class="text-center text-muted mb-4">Verwalte Benutzerkonten der Plattform.</p>
@@ -76,7 +86,10 @@ include("includes/header.php");
         </tr>
         </thead>
         <tbody>
-        <?php while ($row = $result->fetch_assoc()): ?>
+        <?php
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()):
+        ?>
             <tr>
                 <td><?= $row['id'] ?></td>
                 <td><?= htmlspecialchars($row['username']) ?></td>
@@ -99,9 +112,15 @@ include("includes/header.php");
                     </a>
                 </td>
             </tr>
-        <?php endwhile; ?>
+        <?php
+            endwhile;
+        } else {
+            echo "<tr><td colspan='6' class='text-center text-muted'>Keine Benutzer gefunden.</td></tr>";
+        }
+        ?>
         </tbody>
     </table>
 </div>
+
 </body>
 </html>

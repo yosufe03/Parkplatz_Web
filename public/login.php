@@ -4,34 +4,45 @@ include("includes/db_connect.php");
 
 $message = '';
 
+// Check if user was logged out due to being locked
+if (isset($_GET['locked'])) {
+    $message = "Ihr Konto wurde gesperrt. Sie wurden abgemeldet.";
+}
+
+// Include header FIRST to check active status before any other operations
+$pageTitle = "Login";
+include("includes/header.php");
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $email = $_POST['email'];
     $password = $_POST['password'];
 
-    $stmt = $conn->prepare("SELECT id, username, password_hash, role FROM users WHERE email=?");
+    $stmt = $conn->prepare("SELECT id, username, password_hash, role, active FROM users WHERE email=?");
     $stmt->bind_param("s", $email);
     $stmt->execute();
     $result = $stmt->get_result();
 
     if($row = $result->fetch_assoc()) {
-        if(password_verify($password, $row['password_hash'])) {
+        // Check if user is locked
+        if (!$row['active']) {
+            $message = "Ihr Konto wurde gesperrt. Bitte kontaktieren Sie den Support.";
+        } elseif(password_verify($password, $row['password_hash'])) {
             $_SESSION['user_id'] = $row['id'];
             $_SESSION['username'] = $row['username'];
             $_SESSION['role'] = $row['role'];
             header("Location: dashboard.php");
             exit;
+        } else {
+            $message = "Ungültige Anmeldedaten.";
         }
+    } else {
+        $message = "Ungültige Anmeldedaten.";
     }
-    $message = "Invalid credentials.";
 }
 ?>
 
 <!DOCTYPE html>
 <html lang="de">
-<?php
-    $pageTitle = "Login";
-    include("includes/header.php");
-?>
     <style>
         body {
             min-height: 100vh;

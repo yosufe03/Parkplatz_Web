@@ -184,9 +184,9 @@ function load_parking_data($parkingId, $userId)
     $parkingId = (int)$parkingId;
     $userId = (int)$userId;
 
-    $stmt = $conn->prepare("SELECT p.*, pa.available_from, pa.available_to 
-                            FROM parkings p 
-                            LEFT JOIN parking_availability pa ON p.id = pa.parking_id 
+    $stmt = $conn->prepare("SELECT p.*, pa.available_from, pa.available_to
+                            FROM parkings p
+                            LEFT JOIN parking_availability pa ON p.id = pa.parking_id
                             WHERE p.id = ? AND p.owner_id = ? LIMIT 1");
     $stmt->bind_param('ii', $parkingId, $userId);
     $stmt->execute();
