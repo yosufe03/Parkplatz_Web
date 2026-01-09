@@ -1,4 +1,7 @@
 <?php
+// Database connection
+include "db_connect.php";
+
 // Shared parking helpers for ParkShare app
 
 /**
@@ -46,12 +49,16 @@ function get_image_files($parkingId)
 {
     $dir = get_upload_dir($parkingId);
     if (!is_dir($dir)) return [];
+
     $files = glob($dir . '*.{jpg,jpeg,png,gif}', GLOB_BRACE) ?: [];
     sort($files, SORT_NATURAL);
+
     $webPrefix = get_upload_web_prefix($parkingId);
-    return array_map(function ($f) use ($webPrefix) {
-        return $webPrefix . basename($f);
-    }, $files);
+    $result = [];
+    foreach ($files as $f) {
+        $result[] = $webPrefix . basename($f);
+    }
+    return $result;
 }
 
 /**
@@ -109,40 +116,180 @@ function can_edit_parking($conn, $parkingId, $userId, $isAdmin)
 }
 
 /**
- * Save or update a draft parking with form data.
- * Returns the draft parking ID.
+ * Internal: Save parking data (used by save_draft_parking and publish_parking)
  */
-function save_draft($conn, $userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $draftId = null)
+function _save_parking_data($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $status, $parkingId = null)
 {
+    global $conn;
+
     $priceFloat = is_numeric($price) ? (float)$price : 0.0;
-    
-    if ($draftId) {
-        // Update existing draft (affected_rows can be 0 if values didn't change, so don't check it)
-        error_log("save_draft: Attempting UPDATE for draftId=$draftId, userId=$userId");
-        $stmt = $conn->prepare("UPDATE parkings SET title=?, description=?, price=?, district_id=?, neighborhood_id=? WHERE id=? AND owner_id=?");
-        $stmt->bind_param('ssdiiii', $title, $description, $priceFloat, $district_id, $neighborhood_id, $draftId, $userId);
-        $stmt->execute();
-        $stmt->close();
-        error_log("save_draft: UPDATE completed for draftId=$draftId");
+    $district_id = $district_id ? (int)$district_id : null;
+    $neighborhood_id = $neighborhood_id ? (int)$neighborhood_id : null;
+
+    // Update or insert parking
+    if ($parkingId) {
+        $stmt = $conn->prepare("UPDATE parkings SET title=?, description=?, price=?, district_id=?, neighborhood_id=?, status=? WHERE id=? AND owner_id=?");
+        $stmt->bind_param('ssdiisii', $title, $description, $priceFloat, $district_id, $neighborhood_id, $status, $parkingId, $userId);
+        $finalParkingId = $parkingId;
     } else {
-        // Create new draft
-        $stmt = $conn->prepare("INSERT INTO parkings (owner_id, title, description, price, district_id, neighborhood_id, status) VALUES (?, ?, ?, ?, ?, ?, 'draft')");
-        $stmt->bind_param('issdii', $userId, $title, $description, $priceFloat, $district_id, $neighborhood_id);
-        $stmt->execute();
-        $draftId = (int)$stmt->insert_id;
-        $stmt->close();
+        $stmt = $conn->prepare("INSERT INTO parkings (owner_id, title, description, price, district_id, neighborhood_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param('issdiis', $userId, $title, $description, $priceFloat, $district_id, $neighborhood_id, $status);
+        $finalParkingId = null;
     }
-    
-    // Save availability - only if both dates are valid
-    $conn->query("DELETE FROM parking_availability WHERE parking_id = $draftId");
+
+    $stmt->execute();
+    if (!$parkingId) {
+        $finalParkingId = (int)$stmt->insert_id;
+    }
+    $stmt->close();
+
+    // Save availability
+    $conn->query("DELETE FROM parking_availability WHERE parking_id = $finalParkingId");
     if ($available_from && $available_to && isValidDate($available_from) && isValidDate($available_to)) {
         $stmt = $conn->prepare("INSERT INTO parking_availability (parking_id, available_from, available_to) VALUES (?, ?, ?)");
-        $stmt->bind_param('iss', $draftId, $available_from, $available_to);
+        $stmt->bind_param('iss', $finalParkingId, $available_from, $available_to);
         $stmt->execute();
         $stmt->close();
     }
-    
-    return $draftId;
+
+    return $finalParkingId;
+}
+
+/**
+ * Save parking as draft
+ * Returns the parking ID
+ */
+function save_draft_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $parkingId = null)
+{
+    return _save_parking_data($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, 'draft', $parkingId);
+}
+
+/**
+ * Publish parking (set status to pending)
+ * Returns the parking ID
+ */
+function publish_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $parkingId = null)
+{
+    return _save_parking_data($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, 'pending', $parkingId);
+}
+
+/**
+ * Load parking data for a given parking ID and user
+ * Returns array with parking info and form fields, or null if not found/unauthorized
+ */
+function load_parking_data($parkingId, $userId)
+{
+    global $conn;
+
+    $parkingId = (int)$parkingId;
+    $userId = (int)$userId;
+
+    $stmt = $conn->prepare("SELECT p.*, pa.available_from, pa.available_to 
+                            FROM parkings p 
+                            LEFT JOIN parking_availability pa ON p.id = pa.parking_id 
+                            WHERE p.id = ? AND p.owner_id = ? LIMIT 1");
+    $stmt->bind_param('ii', $parkingId, $userId);
+    $stmt->execute();
+    $parking = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$parking) {
+        return null;
+    }
+
+    return [
+        'parking' => $parking,
+        'parkingId' => $parkingId,
+        'title' => $parking['title'] ?? '',
+        'description' => $parking['description'] ?? '',
+        'price' => $parking['price'] ?? '',
+        'district_id' => $parking['district_id'] ?? null,
+        'neighborhood_id' => $parking['neighborhood_id'] ?? null,
+        'available_from' => $parking['available_from'] ?: '',
+        'available_to' => $parking['available_to'] ?: '',
+        'images' => get_image_files($parkingId)
+    ];
+}
+
+/**
+ * Validate parking data before publishing
+ * Returns error message string, or null if valid
+ */
+function validate_parking($available_from, $available_to, $district_id, $neighborhood_id, $parkingId)
+{
+    global $conn, $today;
+
+    // Validate dates
+    if (!isValidDate($available_from) || !isValidDate($available_to)) {
+        return "Bitte gültige Verfügbarkeitsdaten auswählen.";
+    }
+    if ($available_from < $today) {
+        return "Verfügbarkeit darf nicht in der Vergangenheit liegen.";
+    }
+    if ($available_to < $available_from) {
+        return "Das Enddatum muss nach dem Startdatum liegen.";
+    }
+
+    // Validate neighborhood belongs to district
+    $stmt = $conn->prepare("SELECT district_id FROM neighborhoods WHERE id = ?");
+    $stmt->bind_param('i', $neighborhood_id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$row || (int)$row['district_id'] !== $district_id) {
+        return "Gewählter Stadtteil gehört nicht zum ausgewählten Distrikt.";
+    }
+
+    // Validate images
+    $existingImages = $parkingId ? get_image_files($parkingId) : [];
+    $newUploads = !empty($_FILES['images']['tmp_name']) ? count(array_filter($_FILES['images']['tmp_name'])) : 0;
+    $totalImages = count($existingImages) + $newUploads;
+
+    if ($totalImages === 0) {
+        return "Bitte mindestens ein Bild hochladen.";
+    }
+    if ($totalImages > 5) {
+        return "Maximal 5 Bilder erlaubt.";
+    }
+
+    return null;
+}
+
+/**
+ * Get district name by ID
+ */
+function get_district_name($districtId)
+{
+    global $conn;
+
+    if (!$districtId) return '';
+
+    $stmt = $conn->prepare("SELECT name FROM districts WHERE id = ? LIMIT 1");
+    $stmt->bind_param('i', $districtId);
+    $stmt->execute();
+    $name = $stmt->get_result()->fetch_assoc()['name'] ?? '';
+    $stmt->close();
+
+    return $name;
+}
+
+/**
+ * Get neighborhood name by ID
+ */
+function get_neighborhood_name($neighborhoodId)
+{
+    global $conn;
+
+    if (!$neighborhoodId) return '';
+
+    $stmt = $conn->prepare("SELECT name FROM neighborhoods WHERE id = ? LIMIT 1");
+    $stmt->bind_param('i', $neighborhoodId);
+    $stmt->execute();
+    $name = $stmt->get_result()->fetch_assoc()['name'] ?? '';
+    $stmt->close();
+
+    return $name;
 }
 
 ?>

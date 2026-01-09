@@ -1,21 +1,18 @@
 <?php
 session_start();
-include __DIR__ . '/includes/db_connect.php';
 include __DIR__ . '/includes/parking_utils.php';
 
-// Require login
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
 }
 
 $userId = (int)$_SESSION['user_id'];
+$parkingId = (int)($_POST['id'] ?? 0) ?: null;
 
-// First, save any form data that was submitted along with the upload
-if (isset($_POST['title']) || isset($_POST['description']) || isset($_POST['price'])) {
-    $draftId = save_draft(
-        $conn,
-        $userId,
+// Save draft if uploading
+if (isset($_POST['save_draft_btn']) && isset($_POST['title'])) {
+    $parkingId = save_draft_parking($userId,
         trim($_POST['title'] ?? ''),
         trim($_POST['description'] ?? ''),
         $_POST['price'] ?? '',
@@ -23,72 +20,43 @@ if (isset($_POST['title']) || isset($_POST['description']) || isset($_POST['pric
         (int)($_POST['neighborhood_id'] ?? 0) ?: null,
         $_POST['available_from'] ?? '',
         $_POST['available_to'] ?? '',
-        $_SESSION['draft_parking_id'] ?? null
+        $parkingId
     );
-    $_SESSION['draft_parking_id'] = $draftId;
 }
 
-// We no longer rely on a return_to param; when a parking/draft id exists we redirect
-// to the edit page for that parking so the form values are persisted in the DB.
-
-// Determine parking id from session draft or POST
-$parkingId = isset($_POST['id']) && (int)$_POST['id'] > 0 ? (int)$_POST['id'] : ($_SESSION['draft_parking_id'] ?? null);
-
-// Always return to parking_add.php since editing is disabled
-$returnUrl = 'parking_add.php';
-
-if (!$parkingId) {
-    // No draft exists - redirect back to add page with message
-    $_SESSION['upload_error'] = 'Bitte zuerst "Aktualisieren" klicken, um einen Entwurf zu speichern.';
-    header('Location: parking_add.php');
-    exit;
-}
-
-// No sticky QS helper: draft records persist the input values server-side.
-
-// Handle delete-existing-file action
-if (isset($_POST['delete_existing_file']) && $_POST['delete_existing_file'] !== '') {
-    $del = basename($_POST['delete_existing_file']);
+// Delete image
+if (isset($_POST['delete_existing_file'])) {
     if ($parkingId) {
-        $p = get_upload_dir($parkingId) . $del;
+        $p = get_upload_dir($parkingId) . basename($_POST['delete_existing_file']);
         if (is_file($p)) @unlink($p);
     }
-    header("Location: $returnUrl");
-    exit;
 }
 
-// Handle per-slot upload
-if (isset($_POST['upload_slot'])) {
-    $slot = (int)$_POST['upload_slot'];
-    if ($parkingId) {
+// Upload image
+if (isset($_POST['save_draft_btn']) && $parkingId) {
+    $slot = (int)$_POST['save_draft_btn'];
+    if (isset($_FILES['images']['tmp_name'][$slot]) && is_uploaded_file($_FILES['images']['tmp_name'][$slot])) {
         $uploadDir = get_upload_dir($parkingId);
         ensure_dir($uploadDir);
 
-        // compute next number
         $existing = glob($uploadDir . "*.{jpg,jpeg,png}", GLOB_BRACE) ?: [];
-        $nums = [];
-        foreach ($existing as $t) {
-            if (preg_match('/(\\d+)\\.(jpg|jpeg|png)$/i', basename($t), $m)) $nums[] = (int)$m[1];
-        }
-        $next = $nums ? max($nums) + 1 : 1;
-
-        if (isset($_FILES['images']) && isset($_FILES['images']['tmp_name'][$slot]) && is_uploaded_file($_FILES['images']['tmp_name'][$slot])) {
-            $tmpName = $_FILES['images']['tmp_name'][$slot];
-            $originalName = $_FILES['images']['name'][$slot] ?? '';
-            $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-            if (in_array($ext, ['jpg','jpeg','png'])) {
-                $dest = $uploadDir . $next . '.' . $ext;
-                move_uploaded_file($tmpName, $dest);
+        $maxNum = 0;
+        foreach ($existing as $f) {
+            if (preg_match('/(\\d+)\\./i', basename($f), $m)) {
+                $maxNum = max($maxNum, (int)$m[1]);
             }
         }
-    }
 
-    header("Location: $returnUrl");
-    exit;
+        $ext = strtolower(pathinfo($_FILES['images']['name'][$slot], PATHINFO_EXTENSION));
+        if (in_array($ext, ['jpg','jpeg','png'])) {
+            move_uploaded_file($_FILES['images']['tmp_name'][$slot], $uploadDir . (++$maxNum) . '.' . $ext);
+        }
+    }
 }
 
-// nothing matched — redirect back
-header("Location: $returnUrl");
+// Redirect
+$returnUrl = $parkingId ? 'parking_edit.php?id=' . $parkingId : 'parking_add.php';
+header('Location: ' . $returnUrl);
 exit;
 
 ?>

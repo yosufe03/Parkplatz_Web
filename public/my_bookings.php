@@ -1,6 +1,6 @@
 <?php
 session_start();
-include("includes/db_connect.php");
+include_once "includes/parking_utils.php";
 
 // Require login
 if (!isset($_SESSION['user_id'])) {
@@ -24,7 +24,7 @@ if (isset($_POST['cancel_booking_id'])) {
     exit;
 }
 
-// Fetch bookings + parking info (IMPORTANT: use b.price_day)
+// Fetch bookings + parking info
 $stmt = $conn->prepare("
     SELECT 
         b.id AS booking_id,
@@ -34,7 +34,8 @@ $stmt = $conn->prepare("
         b.created_at,
         p.id AS parking_id,
         p.title,
-        p.location
+        p.district_id,
+        p.neighborhood_id
     FROM bookings b
     JOIN parkings p ON p.id = b.parking_id
     WHERE b.user_id = ?
@@ -141,7 +142,12 @@ $today = date('Y-m-d');
                         <div>
                             <h5 class="mb-1"><?= htmlspecialchars($b['title']) ?></h5>
                             <div class="text-muted mb-2">
-                                <?= htmlspecialchars($b['location']) ?>
+                                <?php
+                                    $districtName = get_district_name((int)$b['district_id']);
+                                    $neighborhoodName = get_neighborhood_name((int)$b['neighborhood_id']);
+                                    $location = trim("$districtName, $neighborhoodName", ', ');
+                                    echo htmlspecialchars($location ?: '—');
+                                ?>
                             </div>
 
                             <div class="mb-1">

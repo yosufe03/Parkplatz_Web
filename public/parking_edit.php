@@ -9,19 +9,24 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $userId = (int)$_SESSION['user_id'];
-$returnUrl = "dashboard.php";
+$error = "";
+$returnUrl = "my_parkings.php";
+
+// Get parking ID from URL
+$parkingId = (int)($_GET['id'] ?? 0) ?: null;
+if (!$parkingId) die("Parkplatz-ID erforderlich.");
 ?>
 
 <!DOCTYPE html>
 <html lang="de">
 <?php
-$pageTitle = "Neuer Parkplatz";
+$pageTitle = "Parkplatz bearbeiten";
 include "includes/header.php";
 ?>
 
 <body>
 <div class="container mt-5">
-    <h2>Neuen Parkplatz hinzufügen</h2>
+    <h2>Parkplatz bearbeiten</h2>
 
     <?php include "includes/parking_form.php"; ?>
 </div>
