@@ -146,7 +146,9 @@ $result = $stmt->get_result();
         <tbody>
         <?php while($row = $result->fetch_assoc()): ?>
             <tr>
-                <td><?= htmlspecialchars($row['title']) ?></td>
+                <td>
+                    <a href="parking.php?id=<?= (int)$row['id'] ?>" class="text-decoration-none"><?= htmlspecialchars($row['title']) ?></a>
+                </td>
                 <?php
                     $districtName = '';
                     $neighborhoodName = '';
@@ -177,10 +179,10 @@ $result = $stmt->get_result();
                 <td><?= htmlspecialchars($row['modified_at']) ?></td>
                 <td><?= htmlspecialchars($row['status']) ?></td>
                 <td class="text-center">
-                    <a href="parking_edit.php?id=<?= $row['id'] ?>" class="btn btn-sm btn-warning mb-1">Bearbeiten</a>
+                    <a href="parking.php?id=<?= (int)$row['id'] ?>" class="btn btn-sm btn-info mb-1">Ansehen</a>
 
                     <form method="POST" style="display:inline;" onsubmit="return confirm('Möchten Sie diesen Parkplatz wirklich löschen?');">
-                        <input type="hidden" name="delete_id" value="<?= $row['id'] ?>">
+                        <input type="hidden" name="delete_id" value="<?= (int)$row['id'] ?>">
                         <button type="submit" class="btn btn-sm btn-danger mb-1">Löschen</button>
                     </form>
                 </td>

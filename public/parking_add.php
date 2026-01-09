@@ -1,8 +1,8 @@
 <?php
 session_start();
 include("includes/db_connect.php");
+include_once __DIR__ . '/includes/parking_utils.php';
 
-// Redirect if not logged in
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
@@ -10,78 +10,64 @@ if (!isset($_SESSION['user_id'])) {
 
 $userId = (int)$_SESSION['user_id'];
 $today = date('Y-m-d');
-
 $error = "";
 
-// Sticky values
-$title = $description = "";
-$price = "";
-$available_from = "";
-$available_to = "";
+// Load draft values if exists
+$title = $description = $price = $available_from = $available_to = "";
+$district_id = $neighborhood_id = null;
+$images = [];
 
-// Determine currently selected district/neighborhood from POST (submit) or GET (refresh)
-$district_id = null;
-$neighborhood_id = null;
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['district_id']) && (int)$_POST['district_id'] > 0) $district_id = (int)$_POST['district_id'];
-    if (isset($_POST['neighborhood_id']) && (int)$_POST['neighborhood_id'] > 0) $neighborhood_id = (int)$_POST['neighborhood_id'];
-} else {
-    if (isset($_GET['district_id']) && (int)$_GET['district_id'] > 0) $district_id = (int)$_GET['district_id'];
-    if (isset($_GET['neighborhood_id']) && (int)$_GET['neighborhood_id'] > 0) $neighborhood_id = (int)$_GET['neighborhood_id'];
-}
+$draftId = $_SESSION['draft_parking_id'] ?? null;
+error_log("LOAD: draftId from session=$draftId, REQUEST_METHOD=" . $_SERVER['REQUEST_METHOD']);
 
-// Load districts for selects
-$districts = [];
-$dstmt = $conn->prepare("SELECT * FROM districts ORDER BY name ASC");
-if ($dstmt) {
-    $dstmt->execute();
-    $dres = $dstmt->get_result();
-    while ($d = $dres->fetch_assoc()) $districts[] = $d;
-    $dstmt->close();
-}
-
-// Load neighborhoods depending on currently selected district (server-side dependent select)
-$neighborhoods = [];
-if ($district_id !== null && $district_id > 0) {
-    $nstmt = $conn->prepare("SELECT * FROM neighborhoods WHERE district_id = ? ORDER BY name ASC");
-    if ($nstmt) {
-        $nstmt->bind_param('i', $district_id);
-        $nstmt->execute();
-        $nres = $nstmt->get_result();
-        while ($n = $nres->fetch_assoc()) $neighborhoods[] = $n;
-        $nstmt->close();
-    }
-} else {
-    $nstmt = $conn->prepare("SELECT * FROM neighborhoods ORDER BY name ASC");
-    if ($nstmt) {
-        $nstmt->execute();
-        $nres = $nstmt->get_result();
-        while ($n = $nres->fetch_assoc()) $neighborhoods[] = $n;
-        $nstmt->close();
+if ($draftId) {
+    $stmt = $conn->prepare("SELECT p.*, pa.available_from, pa.available_to 
+                            FROM parkings p 
+                            LEFT JOIN parking_availability pa ON p.id = pa.parking_id 
+                            WHERE p.id = ? LIMIT 1");
+    $stmt->bind_param('i', $draftId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    
+    if ($row) {
+        $title = $row['title'] ?? '';
+        $description = $row['description'] ?? '';
+        $price = $row['price'] ?? '';
+        $district_id = $row['district_id'] ?? null;
+        $neighborhood_id = $row['neighborhood_id'] ?? null;
+        $available_from = $row['available_from'] ?: '';
+        $available_to = $row['available_to'] ?: '';
+        $images = get_image_files($draftId);
     }
 }
 
-function isValidDate($d) {
-    return is_string($d) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d);
-}
-
+// Handle POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Override loaded values with POST values
     $title = trim($_POST['title'] ?? "");
     $description = trim($_POST['description'] ?? "");
     $price = $_POST['price'] ?? "";
-
-    // area selections (required)
-    $district_id = isset($_POST['district_id']) && (int)$_POST['district_id'] > 0 ? (int)$_POST['district_id'] : null;
-    $neighborhood_id = isset($_POST['neighborhood_id']) && (int)$_POST['neighborhood_id'] > 0 ? (int)$_POST['neighborhood_id'] : null;
-
-    // Availability (DATE-only)
+    $district_id = (int)($_POST['district_id'] ?? 0) ?: null;
+    $neighborhood_id = (int)($_POST['neighborhood_id'] ?? 0) ?: null;
     $available_from = $_POST['available_from'] ?? "";
-    $available_to   = $_POST['available_to'] ?? "";
+    $available_to = $_POST['available_to'] ?? "";
 
-    // Basic validation
-    if ($title === "" || $description === "" || $price === "") {
+    // Refresh button - save draft and reload
+    if (isset($_POST['refresh'])) {
+        error_log("BEFORE save_draft: draftId=$draftId, session=" . ($_SESSION['draft_parking_id'] ?? 'null'));
+        $draftId = save_draft($conn, $userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $draftId);
+        $_SESSION['draft_parking_id'] = $draftId;
+        error_log("AFTER save_draft: draftId=$draftId, session=" . $_SESSION['draft_parking_id']);
+
+        header('Location: parking_add.php');
+        exit;
+    }
+
+    // Final submit - validate and save
+    if (!$title || !$description || !$price) {
         $error = "Bitte alle Felder ausfüllen.";
-    } elseif ($district_id === null || $neighborhood_id === null) {
+    } elseif (!$district_id || !$neighborhood_id) {
         $error = "Bitte Distrikt und Stadtteil auswählen.";
     } elseif (!is_numeric($price) || (float)$price < 0) {
         $error = "Bitte einen gültigen Preis eingeben.";
@@ -91,94 +77,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "Verfügbarkeit darf nicht in der Vergangenheit liegen.";
     } elseif ($available_to < $available_from) {
         $error = "Das Enddatum muss nach dem Startdatum liegen.";
+    } else {
+        // Check neighborhood belongs to district
+        $stmt = $conn->prepare("SELECT district_id FROM neighborhoods WHERE id = ?");
+        $stmt->bind_param('i', $neighborhood_id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        
+        if (!$row || (int)$row['district_id'] !== $district_id) {
+            $error = "Gewählter Stadtteil gehört nicht zum ausgewählten Distrikt.";
+        } else {
+            // Check image count
+            $existingImages = $draftId ? get_image_files($draftId) : [];
+            $newUploads = !empty($_FILES['images']['tmp_name']) ? count(array_filter($_FILES['images']['tmp_name'])) : 0;
+            
+            if (count($existingImages) + $newUploads === 0) {
+                $error = "Bitte mindestens ein Bild hochladen.";
+            } elseif (count($existingImages) + $newUploads > 5) {
+                $error = "Maximal 5 Bilder erlaubt.";
+            }
+        }
     }
 
-    // If OK -> insert parking + availability + images
-    if ($error === "") {
-
-        // Insert new parking listing (with optional area refs)
-        // Validate that neighborhood belongs to the selected district
-        $chk = $conn->prepare("SELECT district_id FROM neighborhoods WHERE id = ? LIMIT 1");
-        if ($chk) {
-            $chk->bind_param('i', $neighborhood_id);
-            $chk->execute();
-            $cres = $chk->get_result();
-            if ($cr = $cres->fetch_assoc()) {
-                if ((int)$cr['district_id'] !== (int)$district_id) {
-                    $error = "Gewählter Stadtteil gehört nicht zum ausgewählten Distrikt.";
-                }
-            } else {
-                $error = "Ungültiger Stadtteil.";
-            }
-            $chk->close();
-        }
-
-        $stmt = $conn->prepare(
-            "INSERT INTO parkings (owner_id, title, description, price, district_id, neighborhood_id)
-            VALUES (?, ?, ?, ?, ?, ?)"
-        );
-    $priceFloat = (float)$price;
-    $dvar = $district_id;
-    $nvar = $neighborhood_id;
-    $stmt->bind_param("issdii", $userId, $title, $description, $priceFloat, $dvar, $nvar);
-
-        if (!$stmt->execute()) {
-            $error = "Fehler beim Speichern des Parkplatzes.";
+    if (!$error) {
+        $priceFloat = (float)$price;
+        
+        // Save parking
+        if ($draftId) {
+            $stmt = $conn->prepare("UPDATE parkings SET title=?, description=?, price=?, district_id=?, neighborhood_id=?, status='pending' WHERE id=? AND owner_id=?");
+            $stmt->bind_param("ssdiiii", $title, $description, $priceFloat, $district_id, $neighborhood_id, $draftId, $userId);
+            $parkingId = $draftId;
         } else {
-            $parkingId = (int)$stmt->insert_id;
+            $stmt = $conn->prepare("INSERT INTO parkings (owner_id, title, description, price, district_id, neighborhood_id, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')");
+            $stmt->bind_param("issdii", $userId, $title, $description, $priceFloat, $district_id, $neighborhood_id);
+            $parkingId = 0;
         }
+        $stmt->execute();
+        if (!$draftId) $parkingId = (int)$stmt->insert_id;
         $stmt->close();
 
-    // Insert availability (DATE-only)
-        if ($error === "") {
-            $a = $conn->prepare("
-                INSERT INTO parking_availability (parking_id, available_from, available_to)
-                VALUES (?, ?, ?)
-            ");
-            $a->bind_param("iss", $parkingId, $available_from, $available_to);
+        // Save availability
+        $conn->query("DELETE FROM parking_availability WHERE parking_id = $parkingId");
+        $stmt = $conn->prepare("INSERT INTO parking_availability (parking_id, available_from, available_to) VALUES (?, ?, ?)");
+        $stmt->bind_param("iss", $parkingId, $available_from, $available_to);
+        $stmt->execute();
+        $stmt->close();
 
-            if (!$a->execute()) {
-                $error = "Fehler beim Speichern der Verfügbarkeit.";
+        // Handle uploads
+        if (!empty($_FILES['images']['tmp_name'])) {
+            $uploadDir = get_upload_dir($parkingId);
+            ensure_dir($uploadDir);
+            
+            $maxNum = 0;
+            foreach (glob($uploadDir . "*.{jpg,jpeg,png}", GLOB_BRACE) ?: [] as $img) {
+                if (preg_match('/(\d+)\./i', basename($img), $m)) $maxNum = max($maxNum, (int)$m[1]);
             }
-            $a->close();
-        }
-
-        // Handle file uploads (your existing logic)
-        if ($error === "" && !empty($_FILES['images']['name'][0])) {
-
-            $uploadDir = __DIR__ . "/uploads/parkings/$parkingId/";
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0755, true);
-            }
-
-            foreach ($_FILES['images']['tmp_name'] as $index => $tmpName) {
-                if ($tmpName === "" || !is_uploaded_file($tmpName)) continue;
-
-                $originalName = $_FILES['images']['name'][$index];
-                $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-
-                // Allow only jpg/jpeg/png
-                if (!in_array($ext, ['jpg', 'jpeg', 'png'])) continue;
-
-                $filename = ($index + 1) . "." . $ext; // 1.jpg, 2.jpg, etc.
-                move_uploaded_file($tmpName, $uploadDir . $filename);
-
-                // Save first image as main_image in DB
-                if ($index === 0) {
-                    $stmt2 = $conn->prepare("UPDATE parkings SET main_image=? WHERE id=?");
-                    $stmt2->bind_param("si", $filename, $parkingId);
-                    $stmt2->execute();
-                    $stmt2->close();
+            
+            foreach ($_FILES['images']['tmp_name'] as $idx => $tmp) {
+                if (!$tmp || !is_uploaded_file($tmp) || $maxNum >= 5) continue;
+                $ext = strtolower(pathinfo($_FILES['images']['name'][$idx], PATHINFO_EXTENSION));
+                if (in_array($ext, ['jpg','jpeg','png'])) {
+                    move_uploaded_file($tmp, $uploadDir . ++$maxNum . "." . $ext);
                 }
             }
         }
 
-        // Success redirect
-        if ($error === "") {
-            header("Location: dashboard.php?added=1");
-            exit;
-        }
+        unset($_SESSION['draft_parking_id']);
+        header("Location: my_parkings.php");
+        exit;
     }
+} else {
+    // Handle GET - preserve query params if present
+    if (!empty($_GET['district_id'])) $district_id = (int)$_GET['district_id'] ?: $district_id;
+    if (!empty($_GET['neighborhood_id'])) $neighborhood_id = (int)$_GET['neighborhood_id'] ?: $neighborhood_id;
 }
 ?>
 
@@ -193,89 +165,23 @@ include("includes/header.php");
 <div class="container mt-5">
     <h2>Neuen Parkplatz hinzufügen</h2>
 
-    <?php if ($error !== ""): ?>
+    <?php if ($error): ?>
         <div class="alert alert-danger mt-3"><?= htmlspecialchars($error) ?></div>
+    <?php endif; ?>
+    <?php if (!empty($_SESSION['upload_error'])): ?>
+        <div class="alert alert-warning mt-3"><?= htmlspecialchars($_SESSION['upload_error']) ?></div>
+        <?php unset($_SESSION['upload_error']); ?>
     <?php endif; ?>
 
     <form method="POST" enctype="multipart/form-data" class="mt-4">
+        <?php
+        $submitLabel = 'Parkplatz hinzufügen';
+        include __DIR__ . '/includes/parking_form.php';
+        ?>
 
-        <div class="mb-3">
-            <label for="title" class="form-label">Titel</label>
-            <input type="text" name="title" id="title" class="form-control" required
-                   value="<?= htmlspecialchars($title) ?>">
-        </div>
-
-        <div class="mb-3">
-            <label for="description" class="form-label">Beschreibung</label>
-            <textarea name="description" id="description" class="form-control" rows="4" required><?= htmlspecialchars($description) ?></textarea>
-        </div>
-
-        <!-- location field removed: use Distrikt/Stadtteil selects instead -->
-
-        <div class="mb-3">
-            <label for="price" class="form-label">Preis (€ pro Tag)</label>
-            <input type="number" step="0.01" name="price" id="price" class="form-control" required
-                   value="<?= htmlspecialchars($price) ?>">
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">Distrikt</label>
-            <div class="d-flex">
-                <select name="district_id" class="form-select me-2" required>
-                    <option value="">-- auswählen --</option>
-                    <?php foreach ($districts as $d): ?>
-                        <option value="<?= (int)$d['id'] ?>" <?= (isset($district_id) && $district_id == $d['id']) ? 'selected' : '' ?>><?= htmlspecialchars($d['name']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-
-                <!-- no-JS fallback / GET refresh: reload page to update neighborhoods for selected district -->
-                <!-- formnovalidate prevents HTML5 form validation from blocking this refresh button -->
-                <button type="submit" formmethod="get" formnovalidate class="btn btn-outline-secondary" title="Stadtteile laden">Aktualisieren</button>
-            </div>
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">Stadtteil</label>
-            <select name="neighborhood_id" class="form-select" required>
-                <option value="">-- auswählen --</option>
-                <?php foreach ($neighborhoods as $n): ?>
-                    <option value="<?= (int)$n['id'] ?>" <?= (isset($neighborhood_id) && $neighborhood_id == $n['id']) ? 'selected' : '' ?>><?= htmlspecialchars($n['name']) ?></option>
-                <?php endforeach; ?>
-            </select>
-            <small class="text-muted">Wird benötigt; bitte passenden Distrikt auswählen. Klicken Sie auf "Aktualisieren", um die Liste der Stadtteile für den gewählten Distrikt zu laden.</small>
-        </div>
-
-        <!-- NEW: Availability (DATE-only) -->
-        <div class="mb-3">
-            <label class="form-label">Verfügbarkeit (Datum)</label>
-            <div class="row g-2">
-                <div class="col-md-6">
-                    <label for="available_from" class="form-label">Von</label>
-                    <input type="date" name="available_from" id="available_from"
-                           class="form-control" required min="<?= htmlspecialchars($today) ?>"
-                           value="<?= htmlspecialchars($available_from) ?>">
-                </div>
-                <div class="col-md-6">
-                    <label for="available_to" class="form-label">Bis</label>
-                    <input type="date" name="available_to" id="available_to"
-                           class="form-control" required min="<?= htmlspecialchars($today) ?>"
-                           value="<?= htmlspecialchars($available_to) ?>">
-                </div>
-            </div>
-            <small class="text-muted">Nur zukünftige Daten. Enddatum muss ≥ Startdatum sein.</small>
-        </div>
-
-        <div class="mb-3">
-            <label for="images" class="form-label">Bilder hochladen</label>
-            <input type="file" name="images[]" id="images" class="form-control" multiple accept="image/jpeg,image/png">
-            <small class="text-muted">Hauptbild sollte als erstes ausgewählt werden. Max 5 Bilder, JPG/PNG.</small>
-        </div>
-
-        <button type="submit" class="btn btn-success">Parkplatz hinzufügen</button>
     </form>
 </div>
 
 </body>
 </html>
 
-<!-- No JavaScript: use the "Aktualisieren" button to refresh neighborhoods server-side. -->

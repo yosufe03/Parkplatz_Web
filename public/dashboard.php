@@ -75,7 +75,7 @@ include("includes/header.php");
 
         while ($row = $result->fetch_assoc()):
             ?>
-            <a href="parking_edit.php?id=<?= $row['id'] ?>" class="list-group-item list-group-item-action">
+            <a href="parking.php?id=<?= $row['id'] ?>" class="list-group-item list-group-item-action">
                 <?= htmlspecialchars($row['title']) ?>
 
                 <?php if ($isAdmin): ?>
@@ -186,7 +186,7 @@ include("includes/header.php");
                                 <td><?= htmlspecialchars($p['title']) ?></td>
                                 <td><?= (int)$p['bookings'] ?></td>
                                 <td>€<?= number_format((float)$p['earnings'], 2) ?></td>
-                                <td><a href="parking_edit.php?id=<?= (int)$p['id'] ?>" class="btn btn-sm btn-outline-secondary">Bearbeiten</a></td>
+                                <td><a href="parking.php?id=<?= (int)$p['id'] ?>" class="btn btn-sm btn-outline-secondary">Ansehen</a></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>

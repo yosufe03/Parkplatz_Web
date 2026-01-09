@@ -28,16 +28,16 @@ CREATE TABLE neighborhoods (
 CREATE TABLE parkings (
               id INT AUTO_INCREMENT PRIMARY KEY,
               owner_id INT NOT NULL,
-              title VARCHAR(100) NOT NULL,
-              description TEXT,
-              price DECIMAL(10,2) NOT NULL,
-              status ENUM('pending','approved','rejected') DEFAULT 'pending',
-              main_image VARCHAR(255) NULL,
-              available_from DATETIME,
-              available_to DATETIME,
-              -- geographic references (required)
-              district_id INT NOT NULL,
-              neighborhood_id INT NOT NULL,
+              title VARCHAR(100) NOT NULL DEFAULT '',
+              description TEXT DEFAULT NULL,
+              price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+              -- status: use 'draft' for in-progress listings saved by users, 'pending' for awaiting review
+              status ENUM('draft','pending','approved','rejected') DEFAULT 'draft',
+            --   available_from DATETIME,
+            --   available_to DATETIME,
+              -- geographic references (nullable for drafts, required for published)
+              district_id INT NULL,
+              neighborhood_id INT NULL,
               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
               modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
               FOREIGN KEY (owner_id) REFERENCES users(id),
@@ -50,8 +50,8 @@ CREATE TABLE parkings (
 CREATE TABLE parking_availability (
       id INT AUTO_INCREMENT PRIMARY KEY,
       parking_id INT NOT NULL,
-      available_from DATE NOT NULL,
-      available_to DATE NOT NULL,
+      available_from DATE NOT NULL DEFAULT CURRENT_DATE,
+      available_to DATE NOT NULL DEFAULT CURRENT_DATE,
       FOREIGN KEY (parking_id) REFERENCES parkings(id) ON DELETE CASCADE
 );
 
@@ -110,10 +110,10 @@ INSERT INTO neighborhoods (district_id, name) VALUES
   (3, 'SO36');
 
 -- Sample Parkings (include district/neighborhood IDs)
-INSERT INTO parkings (owner_id, title, description, price, main_image, available_from, available_to, status, district_id, neighborhood_id) VALUES
-  (2, 'City Center Parking', 'Secure parking in downtown', 10.00, 'city_center.jpg', '2025-11-10 08:00:00', '2025-11-10 20:00:00', 'approved', 1, 1),
-  (3, 'Office Garage', 'Covered parking near office', 8.50, 'office_garage.jpg', '2025-11-10 09:00:00', '2025-11-10 18:00:00', 'approved', 2, 2),
-  (2, 'Weekend Parking', 'Cheap weekend parking', 5.00, 'weekend_parking.jpg', '2025-11-15 08:00:00', '2025-11-15 22:00:00', 'approved', 3, 3);
+INSERT INTO parkings (owner_id, title, description, price, status, district_id, neighborhood_id) VALUES
+  (2, 'City Center Parking', 'Secure parking in downtown', 10.00, 'approved', 1, 1),
+  (3, 'Office Garage', 'Covered parking near office', 8.50, 'approved', 2, 2),
+  (2, 'Weekend Parking', 'Cheap weekend parking', 5.00, 'approved', 3, 3);
 
 INSERT INTO parking_availability (parking_id, available_from, available_to) VALUES
     (1, '2026-01-01 12:00:00', '2026-06-30 20:00:00'),
