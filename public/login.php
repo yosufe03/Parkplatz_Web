@@ -2,20 +2,29 @@
 session_start();
 include("includes/db_connect.php");
 
+// Redirect logged-in users to index.php
+if (isset($_SESSION['user_id'])) {
+    header("Location: index.php");
+    exit;
+}
+
 $message = '';
 
-// Check if user was logged out due to being locked
 if (isset($_GET['locked'])) {
     $message = "Ihr Konto wurde gesperrt. Sie wurden abgemeldet.";
 }
 
-// Include header FIRST to check active status before any other operations
+if (isset($_GET['tampered'])) {
+    $message = "Sicherheitswarnung: Ihr Cookie wurde manipuliert. Bitte melden Sie sich erneut an.";
+}
+
 $pageTitle = "Login";
 include("includes/header.php");
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $email = $_POST['email'];
-    $password = $_POST['password'];
+    $email = $_POST['email'] ?? '';
+    $password = $_POST['password'] ?? '';
+    $remember_me = isset($_POST['remember_me']);
 
     $stmt = $conn->prepare("SELECT id, username, password_hash, role, active FROM users WHERE email=?");
     $stmt->bind_param("s", $email);
@@ -23,13 +32,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $result = $stmt->get_result();
 
     if($row = $result->fetch_assoc()) {
-        // Check if user is locked
         if (!$row['active']) {
             $message = "Ihr Konto wurde gesperrt. Bitte kontaktieren Sie den Support.";
         } elseif(password_verify($password, $row['password_hash'])) {
             $_SESSION['user_id'] = $row['id'];
             $_SESSION['username'] = $row['username'];
             $_SESSION['role'] = $row['role'];
+
+            // Create remember me cookie if checked
+            if ($remember_me) {
+                $token = $email . hash_hmac('sha256', $email, 'secret_key_123');
+                setcookie('remember_me', $token, time() + (30 * 24 * 60 * 60), '/', '', false, true);
+            }
+
             header("Location: dashboard.php");
             exit;
         } else {
@@ -72,6 +87,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
             <div class="mb-3">
                 <input class="form-control" type="password" name="password" placeholder="Password" required>
+            </div>
+            <div class="mb-3 form-check">
+                <input class="form-check-input" type="checkbox" name="remember_me" id="remember_me">
+                <label class="form-check-label" for="remember_me">
+                    Anmeldedaten merken (30 Tage)
+                </label>
             </div>
             <button class="btn btn-primary w-100" type="submit">Login</button>
         </form>
