@@ -12,16 +12,6 @@ include "validation.php";
 // Shared parking helpers for ParkShare app
 
 /**
- * Validate YYYY-MM-DD date string
- */
-function isValidDate($date)
-{
-    if (!is_string($date)) return false;
-    $d = DateTime::createFromFormat('Y-m-d', $date);
-    return $d && $d->format('Y-m-d') === $date;
-}
-
-/**
  * Ensure directory exists (recursive)
  */
 function ensure_dir($path)
@@ -339,5 +329,161 @@ function get_neighborhood_name($neighborhoodId)
 
     return $name;
 }
+
+/**
+ * Get parking details including owner and availability
+ * Returns parking record or null if not found
+ */
+function get_parking_by_id($parkingId)
+{
+    global $conn;
+
+    $parkingId = (int)$parkingId;
+    $stmt = $conn->prepare("
+        SELECT p.*, u.username AS owner_name
+        FROM parkings p
+        LEFT JOIN users u ON p.owner_id = u.id
+        WHERE p.id = ?
+    ");
+    $stmt->bind_param("i", $parkingId);
+    $stmt->execute();
+    $parking = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return $parking;
+}
+
+/**
+ * Get average rating and review count for a parking
+ */
+function get_parking_rating($parkingId)
+{
+    global $conn;
+
+    $parkingId = (int)$parkingId;
+    $stmt = $conn->prepare("SELECT AVG(rating) AS avg_rating, COUNT(*) AS review_count FROM parking_reviews WHERE parking_id = ?");
+    $stmt->bind_param("i", $parkingId);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return [
+        'avg_rating' => $result['avg_rating'] !== null ? (float)$result['avg_rating'] : 0.0,
+        'review_count' => (int)$result['review_count']
+    ];
+}
+
+/**
+ * Get all reviews for a parking (limit 20)
+ */
+function get_parking_reviews($parkingId)
+{
+    global $conn;
+
+    $parkingId = (int)$parkingId;
+    $stmt = $conn->prepare("SELECT r.*, u.username FROM parking_reviews r JOIN users u ON r.user_id = u.id WHERE r.parking_id = ? ORDER BY r.created_at DESC LIMIT 20");
+    $stmt->bind_param("i", $parkingId);
+    $stmt->execute();
+    $reviews = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    return $reviews;
+}
+
+/**
+ * Get user's review for a parking (if exists)
+ */
+function get_user_review($parkingId, $userId)
+{
+    global $conn;
+
+    $parkingId = (int)$parkingId;
+    $userId = (int)$userId;
+    $stmt = $conn->prepare("SELECT rating, comment FROM parking_reviews WHERE parking_id = ? AND user_id = ?");
+    $stmt->bind_param("ii", $parkingId, $userId);
+    $stmt->execute();
+    $review = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return $review;
+}
+
+/**
+ * Check if parking is in user's favorites
+ */
+function is_parking_favorite($parkingId, $userId)
+{
+    global $conn;
+
+    $parkingId = (int)$parkingId;
+    $userId = (int)$userId;
+    $stmt = $conn->prepare("SELECT id FROM favorites WHERE parking_id = ? AND user_id = ? LIMIT 1");
+    $stmt->bind_param("ii", $parkingId, $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $isFavorite = ($result && $result->num_rows > 0);
+    $stmt->close();
+
+    return $isFavorite;
+}
+
+/**
+ * Get all available dates for a parking as associative array
+ * Returns: ['Y-m-d' => true, ...]
+ */
+function get_available_dates($parkingId)
+{
+    global $conn;
+
+    $parkingId = (int)$parkingId;
+    $availableDates = [];
+
+    $stmt = $conn->prepare("SELECT available_from, available_to FROM parking_availability WHERE parking_id = ?");
+    $stmt->bind_param("i", $parkingId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    while ($row = $result->fetch_assoc()) {
+        $s = new DateTime(substr($row['available_from'], 0, 10));
+        $e = new DateTime(substr($row['available_to'], 0, 10));
+        while ($s <= $e) {
+            $availableDates[$s->format('Y-m-d')] = true;
+            $s->modify('+1 day');
+        }
+    }
+    $stmt->close();
+
+    return $availableDates;
+}
+
+/**
+ * Get all booked dates for a parking as associative array
+ * Returns: ['Y-m-d' => true, ...]
+ */
+function get_booked_dates($parkingId)
+{
+    global $conn;
+
+    $parkingId = (int)$parkingId;
+    $bookedDates = [];
+
+    $stmt = $conn->prepare("SELECT booking_start, booking_end FROM bookings WHERE parking_id = ?");
+    $stmt->bind_param("i", $parkingId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    while ($row = $result->fetch_assoc()) {
+        $s = new DateTime($row['booking_start']);
+        $e = new DateTime($row['booking_end']);
+        while ($s <= $e) {
+            $bookedDates[$s->format('Y-m-d')] = true;
+            $s->modify('+1 day');
+        }
+    }
+    $stmt->close();
+
+    return $bookedDates;
+}
+
 
 ?>

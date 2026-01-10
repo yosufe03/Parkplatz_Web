@@ -572,3 +572,29 @@ textarea:focus {
     }
 }
 
+/* ============================================================================
+   Parking Details Page
+   ============================================================================ */
+
+.parking-img {
+    width: 100%;
+    height: 400px;
+    object-fit: cover;
+    border-radius: 10px;
+}
+
+/* Available dates display */
+.available-dates-display {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.available-dates-display .badge {
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+    white-space: nowrap;
+}
+
+
