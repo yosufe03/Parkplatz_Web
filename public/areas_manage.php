@@ -1,7 +1,11 @@
 <?php
-session_start();
-include('includes/db_connect.php');
+include_once "includes/parking_utils.php";
 
+// Include header FIRST to start session
+$pageTitle = "Bereiche verwalten";
+include "includes/header.php";
+
+// NOW check auth - session is started
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;

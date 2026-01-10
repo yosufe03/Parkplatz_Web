@@ -1,7 +1,11 @@
 <?php
-session_start();
 include_once "includes/parking_utils.php";
 
+// Include header FIRST to start session
+$pageTitle = "Statistiken";
+include "includes/header.php";
+
+// NOW check auth - session is started
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
@@ -77,7 +81,6 @@ $perStmt->close();
 
 <!DOCTYPE html>
 <html lang="de">
-<?php $pageTitle = "Statistiken"; include "includes/header.php"; ?>
 <body>
 <div class="container-fluid mt-5">
     <h2>📊 Meine Statistiken</h2>

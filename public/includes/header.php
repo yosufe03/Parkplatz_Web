@@ -1,10 +1,26 @@
 <?php
+// Load configuration FIRST (if not already loaded)
+if (!isset($config) || !is_array($config)) {
+    $config = include __DIR__ . '/../config.php';
+}
+
+// Configure session settings BEFORE starting session
 if (session_status() === PHP_SESSION_NONE) {
+    ini_set('session.cookie_httponly', '1');
+    ini_set('session.cookie_samesite', 'Strict');
+    if ($config['app_env'] === 'production') {
+        ini_set('session.cookie_secure', '1');
+    }
+    ini_set('session.gc_maxlifetime', (string)$config['session_timeout']);
+
+    // NOW start the session
     session_start();
 }
 
-// Include database connection
+// Include utilities after session is started
 include_once __DIR__ . '/db_connect.php';
+include_once __DIR__ . '/security.php';
+include_once __DIR__ . '/validation.php';
 
 // Auto-login from remember_me cookie
 if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_me'])) {
@@ -35,6 +51,24 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_me'])) {
 $isLoggedIn = isset($_SESSION['user_id']);
 $username = $isLoggedIn ? $_SESSION['username'] : '';
 
+// Check session timeout
+if ($isLoggedIn && isset($_SESSION['last_activity'])) {
+    $inactive_time = time() - $_SESSION['last_activity'];
+
+    if ($inactive_time > $config['session_timeout']) {
+        // Session has expired
+        session_destroy();
+        setcookie('remember_me', '', time() - 3600, '/', '', false, true);
+        header("Location: login.php?expired=1");
+        exit;
+    }
+}
+
+// Update last activity timestamp
+if ($isLoggedIn) {
+    $_SESSION['last_activity'] = time();
+}
+
 // Check if logged-in user has a valid remember_me cookie (tampering detection)
 if ($isLoggedIn && isset($_COOKIE['remember_me'])) {
     $token = $_COOKIE['remember_me'];
@@ -42,7 +76,7 @@ if ($isLoggedIn && isset($_COOKIE['remember_me'])) {
     if (strlen($token) > 64) {
         $actual_sig = substr($token, -64);
         $email = substr($token, 0, -64);
-        $expected_sig = hash_hmac('sha256', $email, 'secret_key_123');
+        $expected_sig = hash_hmac('sha256', $email, $config['app_secret_key']);
 
         // If signature doesn't match, cookie was tampered with - log out immediately
         if (!hash_equals($actual_sig, $expected_sig)) {
@@ -76,6 +110,7 @@ if ($isLoggedIn && isset($conn)) {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= isset($pageTitle) ? htmlspecialchars("$pageTitle | ParkShare") : "ParkShare" ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="css/style.css" rel="stylesheet">
 </head>
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark position-relative">
@@ -120,36 +155,3 @@ if ($isLoggedIn && isset($conn)) {
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-<style>
-    /* Mobile-first: Hamburger button centered and fully visible */
-    .navbar-toggler.d-lg-none {
-        position: absolute;
-        top: 0;           /* attach to top of navbar */
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 2;
-        display: flex;
-        align-items: center;
-    }
-
-    /* Collapse menu opens below hamburger on mobile */
-    @media (max-width: 991.98px) {
-        #navbarMain {
-            flex-direction: column;
-            width: 100%;
-            text-align: center;
-            /*margin-top: 3rem; !* push menu below hamburger *!*/
-        }
-
-        .navbar-nav .nav-item {
-            width: 100%; /* full width for easier tapping */
-        }
-    }
-
-    /* Desktop: center menu items */
-    @media (min-width: 992px) {
-        #navbarMain {
-            justify-content: center !important;
-        }
-    }
-</style>

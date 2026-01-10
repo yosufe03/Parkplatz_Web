@@ -1,8 +1,9 @@
 <?php
-session_start();
-include("includes/db_connect.php");
+// Include header FIRST to start session
+$pageTitle = "Dashboard";
+include("includes/header.php");
 
-// Prüfen, ob eingeloggt
+// NOW check if logged in - session is started
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
@@ -20,12 +21,6 @@ $currentUser = $resultUser->fetch_assoc();
 $isAdmin = $currentUser['role'] === 'admin';
 ?>
 
-<!DOCTYPE html>
-<html lang="de">
-<?php
-$pageTitle = "Dashboard";
-include("includes/header.php");
-?>
 
 <body>
 

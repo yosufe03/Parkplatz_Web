@@ -1,7 +1,11 @@
 <?php
-session_start();
 include_once "includes/parking_utils.php";
 
+// Include header FIRST to start session
+$pageTitle = "Meine Parkplätze";
+include "includes/header.php";
+
+// NOW check auth - session is started
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
@@ -83,10 +87,6 @@ $result = $stmt->get_result();
 
 <!DOCTYPE html>
 <html lang="de">
-<?php
-$pageTitle = "Meine Parkplätze";
-include "includes/header.php";
-?>
 
 <style>
     .card-img-top {

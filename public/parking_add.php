@@ -1,8 +1,11 @@
 <?php
-session_start();
 include_once "includes/parking_utils.php";
 
-// Auth check
+// Include header FIRST to start session
+$pageTitle = "Neuer Parkplatz";
+include "includes/header.php";
+
+// NOW check auth - session is started
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
@@ -12,12 +15,6 @@ $userId = (int)$_SESSION['user_id'];
 $returnUrl = "dashboard.php";
 ?>
 
-<!DOCTYPE html>
-<html lang="de">
-<?php
-$pageTitle = "Neuer Parkplatz";
-include "includes/header.php";
-?>
 
 <body>
 <div class="container mt-5">

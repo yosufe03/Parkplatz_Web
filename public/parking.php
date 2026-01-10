@@ -1,5 +1,5 @@
 <?php
-include("includes/db_connect.php");
+include("includes/parking_utils.php");
 // start session early so we can read `$_SESSION['user_id']` before header include
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -8,9 +8,6 @@ if (session_status() === PHP_SESSION_NONE) {
 $id = isset($_GET['id']) ? (int)trim($_GET['id']) : 0;
 if ($id <= 0) die("Invalid parking id.");
 
-function isValidDate($d) {
-    return is_string($d) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d);
-}
 function normalizeMonthYear($m, $y) {
     if ($m < 1) { $m = 12; $y--; }
     if ($m > 12) { $m = 1; $y++; }

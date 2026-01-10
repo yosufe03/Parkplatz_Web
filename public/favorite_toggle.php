@@ -1,6 +1,6 @@
 <?php
-session_start();
 include("includes/db_connect.php");
+include("includes/header.php");
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: index.php');

@@ -1,6 +1,13 @@
 <?php
+/**
+ * Parking Utilities
+ * Shared functions for parking management, image uploads, and validation
+ */
+
 // Database connection
 include "db_connect.php";
+include "security.php";
+include "validation.php";
 
 // Shared parking helpers for ParkShare app
 
@@ -145,7 +152,7 @@ function _save_parking_data($userId, $title, $description, $price, $district_id,
 
     // Save availability
     $conn->query("DELETE FROM parking_availability WHERE parking_id = $finalParkingId");
-    if ($available_from && $available_to && isValidDate($available_from) && isValidDate($available_to)) {
+    if ($available_from && $available_to && is_valid_date($available_from) && is_valid_date($available_to)) {
         $stmt = $conn->prepare("INSERT INTO parking_availability (parking_id, available_from, available_to) VALUES (?, ?, ?)");
         $stmt->bind_param('iss', $finalParkingId, $available_from, $available_to);
         $stmt->execute();
@@ -172,6 +179,73 @@ function publish_parking($userId, $title, $description, $price, $district_id, $n
 {
     return _save_parking_data($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, 'pending', $parkingId);
 }
+
+function upload_parking_image($slot, $parkingId)
+{
+        if (!$parkingId) {
+            return false;
+        }
+
+    if (
+        !isset($_FILES['images']['tmp_name'][$slot]) ||
+        !is_uploaded_file($_FILES['images']['tmp_name'][$slot])
+    ) {
+        return false;
+    }
+
+    $uploadDir = get_upload_dir($parkingId);
+    ensure_dir($uploadDir);
+
+    // Find highest existing number
+    $existing = glob($uploadDir . "*.{jpg,jpeg,png}", GLOB_BRACE) ?: [];
+    $maxNum = 0;
+
+    foreach ($existing as $file) {
+        $filename = basename($file);        // e.g. "12.jpg"
+        $number   = (int) explode('.', $filename)[0]; // take part before "."
+
+        $maxNum = max($maxNum, $number);
+    }
+
+    $ext = strtolower(
+        pathinfo($_FILES['images']['name'][$slot], PATHINFO_EXTENSION)
+    );
+
+    if (!in_array($ext, ['jpg', 'jpeg', 'png'], true)) {
+        return false;
+    }
+
+    $target = $uploadDir . (++$maxNum) . '.' . $ext;
+
+    return move_uploaded_file(
+        $_FILES['images']['tmp_name'][$slot],
+        $target
+    );
+}
+
+
+/**
+ * Deletes an uploaded image for a parking entry.
+ *
+ * @param int    $parkingId
+ * @param string $filename   File name only (no path!)
+ * @return bool              True if deleted, false otherwise
+ */
+function delete_parking_image(string $filename, int $parkingId): bool
+{
+    if (!$parkingId || !$filename) {
+        return false;
+    }
+
+    $path = get_upload_dir($parkingId) . basename($filename);
+
+    if (!is_file($path)) {
+        return false;
+    }
+
+    return unlink($path);
+}
+
 
 /**
  * Load parking data for a given parking ID and user
@@ -211,50 +285,24 @@ function load_parking_data($parkingId, $userId)
     ];
 }
 
-/**
- * Validate parking data before publishing
- * Returns error message string, or null if valid
- */
-function validate_parking($available_from, $available_to, $district_id, $neighborhood_id, $parkingId)
+function get_districts()
 {
-    global $conn, $today;
-
-    // Validate dates
-    if (!isValidDate($available_from) || !isValidDate($available_to)) {
-        return "Bitte gültige Verfügbarkeitsdaten auswählen.";
-    }
-    if ($available_from < $today) {
-        return "Verfügbarkeit darf nicht in der Vergangenheit liegen.";
-    }
-    if ($available_to < $available_from) {
-        return "Das Enddatum muss nach dem Startdatum liegen.";
-    }
-
-    // Validate neighborhood belongs to district
-    $stmt = $conn->prepare("SELECT district_id FROM neighborhoods WHERE id = ?");
-    $stmt->bind_param('i', $neighborhood_id);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    if (!$row || (int)$row['district_id'] !== $district_id) {
-        return "Gewählter Stadtteil gehört nicht zum ausgewählten Distrikt.";
-    }
-
-    // Validate images
-    $existingImages = $parkingId ? get_image_files($parkingId) : [];
-    $newUploads = !empty($_FILES['images']['tmp_name']) ? count(array_filter($_FILES['images']['tmp_name'])) : 0;
-    $totalImages = count($existingImages) + $newUploads;
-
-    if ($totalImages === 0) {
-        return "Bitte mindestens ein Bild hochladen.";
-    }
-    if ($totalImages > 5) {
-        return "Maximal 5 Bilder erlaubt.";
-    }
-
-    return null;
+    global $conn;
+    $res = $conn->query("SELECT * FROM districts ORDER BY name ASC");
+    return $res->fetch_all(MYSQLI_ASSOC);
 }
+
+function get_neighborhoods_for_district($districtId)
+{
+    global $conn;
+    $stmt = $conn->prepare("SELECT * FROM neighborhoods WHERE district_id = ? ORDER BY name ASC");
+    $stmt->bind_param('i', $districtId);
+    $stmt->execute();
+    $neighborhoods = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $neighborhoods;
+}
+
 
 /**
  * Get district name by ID

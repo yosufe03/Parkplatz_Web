@@ -1,6 +1,5 @@
 <?php
-session_start();
-include("includes/db_connect.php");
+include_once "includes/parking_utils.php";
 
 $today = date('Y-m-d');
 
@@ -13,9 +12,6 @@ $to   = $_GET['to'] ?? '';
 $useDistrict = ($district_id > 0);
 $useNeighborhood = ($neighborhood_id > 0);
 
-function isValidDate($d) {
-    return is_string($d) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d);
-}
 
 // Load selected district/neighborhood names for display
 $selectedDistrictName = null;

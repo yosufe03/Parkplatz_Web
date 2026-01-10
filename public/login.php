@@ -1,10 +1,14 @@
 <?php
-session_start();
 include("includes/db_connect.php");
+include("includes/security.php");
 
-// Redirect logged-in users to index.php
+// Include header FIRST to start session
+$pageTitle = "Login";
+include("includes/header.php");
+
+// NOW check if already logged in - session is started
 if (isset($_SESSION['user_id'])) {
-    header("Location: index.php");
+    header("Location: dashboard.php");
     exit;
 }
 
@@ -18,40 +22,56 @@ if (isset($_GET['tampered'])) {
     $message = "Sicherheitswarnung: Ihr Cookie wurde manipuliert. Bitte melden Sie sich erneut an.";
 }
 
-$pageTitle = "Login";
-include("includes/header.php");
+if (isset($_GET['expired'])) {
+    $message = "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.";
+}
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $email = $_POST['email'] ?? '';
-    $password = $_POST['password'] ?? '';
-    $remember_me = isset($_POST['remember_me']);
-
-    $stmt = $conn->prepare("SELECT id, username, password_hash, role, active FROM users WHERE email=?");
-    $stmt->bind_param("s", $email);
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    if($row = $result->fetch_assoc()) {
-        if (!$row['active']) {
-            $message = "Ihr Konto wurde gesperrt. Bitte kontaktieren Sie den Support.";
-        } elseif(password_verify($password, $row['password_hash'])) {
-            $_SESSION['user_id'] = $row['id'];
-            $_SESSION['username'] = $row['username'];
-            $_SESSION['role'] = $row['role'];
-
-            // Create remember me cookie if checked
-            if ($remember_me) {
-                $token = $email . hash_hmac('sha256', $email, 'secret_key_123');
-                setcookie('remember_me', $token, time() + (30 * 24 * 60 * 60), '/', '', false, true);
-            }
-
-            header("Location: dashboard.php");
-            exit;
-        } else {
-            $message = "Ungültige Anmeldedaten.";
-        }
+    // CSRF protection
+    if (!verify_csrf_token()) {
+        $message = "Sicherheitsüberprüfung fehlgeschlagen. Bitte versuchen Sie es erneut.";
     } else {
-        $message = "Ungültige Anmeldedaten.";
+        $email = $_POST['email'] ?? '';
+        $password = $_POST['password'] ?? '';
+        $remember_me = isset($_POST['remember_me']);
+
+        // Rate limiting to prevent brute force
+        if (is_rate_limited('login_attempt', 5, 300)) {
+            $message = "Zu viele Anmeldeversuche. Bitte versuchen Sie es in 5 Minuten erneut.";
+        } else {
+            $stmt = $conn->prepare("SELECT id, username, password_hash, role, active FROM users WHERE email=?");
+            $stmt->bind_param("s", $email);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            if($row = $result->fetch_assoc()) {
+                if (!$row['active']) {
+                    $message = "Ihr Konto wurde gesperrt. Bitte kontaktieren Sie den Support.";
+                } elseif(password_verify($password, $row['password_hash'])) {
+                    $_SESSION['user_id'] = $row['id'];
+                    $_SESSION['username'] = $row['username'];
+                    $_SESSION['role'] = $row['role'];
+                    $_SESSION['last_activity'] = time(); // Set initial activity time
+
+                    // Clear rate limit on successful login
+                    clear_rate_limit('login_attempt');
+
+                    // Create remember me cookie if checked
+                    if ($remember_me) {
+                        $token = $email . hash_hmac('sha256', $email, $config['app_secret_key']);
+                        setcookie('remember_me', $token, time() + (30 * 24 * 60 * 60), '/', '', false, true);
+                    }
+
+                    header("Location: dashboard.php");
+                    exit;
+                } else {
+                    $message = "Ungültige Anmeldedaten.";
+                }
+            } else {
+                $message = "Ungültige Anmeldedaten.";
+            }
+            $stmt->close();
+        }
     }
 }
 ?>
@@ -82,6 +102,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <div class="login-card bg-white">
         <h2 class="text-center mb-4">Login</h2>
         <form method="POST">
+            <?= csrf_field() ?>
             <div class="mb-3">
                 <input class="form-control" type="email" name="email" placeholder="Email" required>
             </div>

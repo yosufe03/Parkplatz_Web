@@ -1,7 +1,17 @@
 <?php
+// Check security includes are loaded
+if (!function_exists('csrf_field')) {
+    include_once __DIR__ . '/security.php';
+}
+if (!function_exists('validate_price')) {
+    include_once __DIR__ . '/validation.php';
+}
+
+//include("validation.php");
+
 // Initialize basic variables
 $today = date('Y-m-d');
-$error = "";
+$errors = [];
 $districts = [];
 $neighborhoods = [];
 
@@ -45,12 +55,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if (isset($_POST['upload_image']) && $parkingId) {
+        $savedParkingId = save_draft_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $parkingId ?? null);
+        upload_parking_image($_POST['upload_image'], $parkingId);
+        header('Location: parking_edit.php?id=' . $parkingId);
+    }
+
+    if (isset($_POST['delete_image']) && $parkingId) {
+        $savedParkingId = save_draft_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $parkingId ?? null);
+        delete_parking_image($_POST['delete_image'], $parkingId);
+        header('Location: parking_edit.php?id=' . $parkingId);
+    }
+
     // Publish - with validation
     if (isset($_POST['publish'])) {
-        $error = validate_parking($available_from, $available_to, $district_id, $neighborhood_id, $parkingId ?? null);
+        $errors = validate_parking($title, $description, $price, $available_from, $available_to, $district_id, $neighborhood_id, $parkingId ?? null);
 
         // If no errors, publish
-        if (!$error) {
+        if (empty($errors)) {
             publish_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $parkingId ?? null);
             header("Location: my_parkings.php");
             exit;
@@ -60,28 +82,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Load districts
 if (empty($districts)) {
-    $dstmt = $conn->prepare("SELECT * FROM districts ORDER BY name ASC");
-    $dstmt->execute();
-    $districts = $dstmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $dstmt->close();
+    $districts = get_districts();
 }
 
 // Load neighborhoods
 if (isset($district_id) && $district_id > 0) {
-    $nstmt = $conn->prepare("SELECT * FROM neighborhoods WHERE district_id = ? ORDER BY name ASC");
-    $nstmt->bind_param('i', $district_id);
-    $nstmt->execute();
-    $neighborhoods = $nstmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $nstmt->close();
+    $neighborhoods = get_neighborhoods_for_district($district_id);
 }
 ?>
 
 <form method="POST" enctype="multipart/form-data" class="mt-4">
-
+<?= csrf_field() ?>
 <!-- Error Messages -->
-<?php if ($error): ?>
-    <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
-<?php endif; ?>
+
+    <?php foreach ($errors as $error) : ?>
+        <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
+    <?php endforeach; ?>
+
 
 <?php if (!empty($_SESSION['upload_error'])): ?>
     <div class="alert alert-warning"><?= htmlspecialchars($_SESSION['upload_error']) ?></div>
@@ -157,9 +174,9 @@ if (isset($district_id) && $district_id > 0) {
                 </div>
                 <input type="file" name="images[]" class="form-control form-control-sm mt-2" accept="image/*">
                 <div class="d-flex gap-2 mt-2">
-                    <button type="submit" formnovalidate name="save_draft_btn" value="<?= $i ?>" class="btn btn-sm btn-primary" formaction="/upload_image.php">Upload</button>
+                    <button type="submit" formnovalidate name="upload_image" value="<?= $i ?>" class="btn btn-sm btn-primary">Upload</button>
                     <?php if ($slots[$i]): ?>
-                        <button type="submit" formnovalidate name="delete_existing_file" value="<?= basename($slots[$i]) ?>" class="btn btn-sm btn-danger" formaction="/upload_image.php">×</button>
+                        <button type="submit" formnovalidate name="delete_image" value="<?= basename($slots[$i]) ?>" class="btn btn-sm btn-danger">×</button>
                     <?php endif; ?>
                 </div>
             </div>

@@ -1,8 +1,11 @@
 <?php
-session_start();
 include_once "includes/parking_utils.php";
 
-// Require login
+// Include header FIRST to start session
+$pageTitle = "Meine Buchungen";
+include "includes/header.php";
+
+// NOW check auth - session is started
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
@@ -61,10 +64,6 @@ $today = date('Y-m-d');
 ?>
 <!DOCTYPE html>
 <html lang="de">
-<?php
-    $pageTitle = "Meine Buchungen";
-    include("includes/header.php");
-?>
 <body class="bg-light">
 
 <div class="container py-4">
