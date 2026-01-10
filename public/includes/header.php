@@ -3,21 +3,69 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Include database connection
+include_once __DIR__ . '/db_connect.php';
+
+// Auto-login from remember_me cookie
+if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_me'])) {
+    $token = $_COOKIE['remember_me'];
+
+    if (strlen($token) > 64) {
+        $actual_sig = substr($token, -64);
+        $email = substr($token, 0, -64);
+        $expected_sig = hash_hmac('sha256', $email, 'secret_key_123');
+
+        if (hash_equals($actual_sig, $expected_sig)) {
+            $stmt = $conn->prepare("SELECT id, username, role, active FROM users WHERE email = ? AND active = 1");
+            $stmt->bind_param("s", $email);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            if ($result->num_rows > 0) {
+                $row = $result->fetch_assoc();
+                $_SESSION['user_id'] = $row['id'];
+                $_SESSION['username'] = $row['username'];
+                $_SESSION['role'] = $row['role'];
+            }
+            $stmt->close();
+        }
+    }
+}
+
 $isLoggedIn = isset($_SESSION['user_id']);
 $username = $isLoggedIn ? $_SESSION['username'] : '';
 
-// Check if logged-in user is still active
+// Check if logged-in user has a valid remember_me cookie (tampering detection)
+if ($isLoggedIn && isset($_COOKIE['remember_me'])) {
+    $token = $_COOKIE['remember_me'];
+
+    if (strlen($token) > 64) {
+        $actual_sig = substr($token, -64);
+        $email = substr($token, 0, -64);
+        $expected_sig = hash_hmac('sha256', $email, 'secret_key_123');
+
+        // If signature doesn't match, cookie was tampered with - log out immediately
+        if (!hash_equals($actual_sig, $expected_sig)) {
+            session_destroy();
+            setcookie('remember_me', '', time() - 3600, '/', '', false, true);
+            header("Location: login.php?tampered=1");
+            exit;
+        }
+    }
+}
+
+// Check if user is still active (locked accounts log out immediately)
 if ($isLoggedIn && isset($conn)) {
     $userId = (int)$_SESSION['user_id'];
     $stmt = $conn->prepare("SELECT active FROM users WHERE id = ? LIMIT 1");
     $stmt->bind_param('i', $userId);
     $stmt->execute();
-    $activeCheckResult = $stmt->get_result()->fetch_assoc();
+    $result = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
-    // If user is locked, log them out
-    if (!$activeCheckResult || !$activeCheckResult['active']) {
+    if (!$result || !$result['active']) {
         session_destroy();
+        setcookie('remember_me', '', time() - 3600, '/', '', false, true);
         header("Location: login.php?locked=1");
         exit;
     }
@@ -67,7 +115,6 @@ if ($isLoggedIn && isset($conn)) {
                 <a href="register.php" class="btn btn-outline-light btn-sm">Register</a>
             <?php endif; ?>
         </div>
-
     </div>
 </nav>
 

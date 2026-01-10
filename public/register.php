@@ -2,6 +2,12 @@
 session_start();
 include("includes/db_connect.php");
 
+// Redirect logged-in users to index.php
+if (isset($_SESSION['user_id'])) {
+    header("Location: index.php");
+    exit;
+}
+
 $message = '';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
