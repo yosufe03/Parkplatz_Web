@@ -16,6 +16,8 @@ $returnUrl = "dashboard.php";
 ?>
 
 
+<!DOCTYPE html>
+<html lang="de">
 <body>
 <div class="container mt-5">
     <h2>Neuen Parkplatz hinzufügen</h2>

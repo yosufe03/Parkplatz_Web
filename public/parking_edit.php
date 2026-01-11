@@ -21,6 +21,8 @@ if (!$parkingId) die("Parkplatz-ID erforderlich.");
 ?>
 
 
+<!DOCTYPE html>
+<html lang="de">
 <body>
 <div class="container mt-5">
     <h2>Parkplatz bearbeiten</h2>

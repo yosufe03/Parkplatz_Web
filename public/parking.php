@@ -1,17 +1,26 @@
 <?php
-include("includes/parking_utils.php");
-include("includes/header.php");
+include_once "includes/parking_utils.php";
 
-$id = isset($_GET['id']) ? (int)trim($_GET['id']) : 0;
-if ($id <= 0) die("Invalid parking id.");
+$pageTitle = "Parkplatz Details";
+include "includes/header.php";
+
+$id = (int)($_GET['id'] ?? 0);
+if ($id <= 0) {
+    header("Location: index.php");
+    exit;
+}
 
 $parking = get_parking_by_id($id);
-if (!$parking) die("Parking not found");
+if (!$parking) {
+    header("Location: index.php");
+    exit;
+}
 
 $isOwner = isset($_SESSION['user_id']) && $parking['owner_id'] == $_SESSION['user_id'];
-$isAdmin = isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
+$isAdmin = $_SESSION['is_admin'] ?? false;
 if ($parking['status'] === 'rejected' && !$isOwner && !$isAdmin) {
-    die("Parkplatz nicht gefunden oder keine Berechtigung.");
+    header("Location: index.php");
+    exit;
 }
 
 $ratingData = get_parking_rating($id);
@@ -43,14 +52,14 @@ if (isset($_SESSION['user_id'])) {
                     <div class="carousel-inner">
                         <?php foreach ($images as $i => $img): ?>
                             <div class="carousel-item <?= $i === 0 ? 'active' : '' ?>">
-                                <img src="<?= htmlspecialchars($img) ?>" class="parking-img" alt="Parking image">
+                                <img src="<?= htmlspecialchars($img) ?>" class="parking-img" alt="Parkplatz">
                             </div>
                         <?php endforeach; ?>
                     </div>
                 </div>
             <?php endif; ?>
 
-            <?php include("includes/calendar.php"); ?>
+            <?php include "includes/calendar.php"; ?>
         </div>
 
         <!-- RIGHT -->
@@ -62,12 +71,10 @@ if (isset($_SESSION['user_id'])) {
                 <strong>Stadtteil:</strong> <?= htmlspecialchars($neighborhoodName ?: '—') ?>
             </p>
 
-            <h4 class="text-primary">
-                €<?= number_format((float)$parking['price'], 2) ?> / day
-            </h4>
+            <h4 class="text-primary">€<?= number_format((float)$parking['price'], 2) ?> / Tag</h4>
 
             <?php if (!empty($parking['owner_name'])): ?>
-                <p><strong>Owner:</strong> <?= htmlspecialchars($parking['owner_name']) ?></p>
+                <p><strong>Besitzer:</strong> <?= htmlspecialchars($parking['owner_name']) ?></p>
             <?php endif; ?>
 
             <?php if (isset($_SESSION['user_id'])): ?>
@@ -83,39 +90,36 @@ if (isset($_SESSION['user_id'])) {
                 </form>
             <?php endif; ?>
 
-            <!-- Ratings summary -->
             <div class="mb-2">
-                <strong>Rating:</strong>
+                <strong>Bewertung:</strong>
                 <?php if ($ratingData['review_count'] > 0): ?>
                     <span class="text-warning">★ <?= number_format($ratingData['avg_rating'], 1) ?></span>
                     <small class="text-muted">(<?= $ratingData['review_count'] ?>)</small>
                 <?php else: ?>
-                    <small class="text-muted">No ratings yet</small>
+                    <small class="text-muted">Keine Bewertungen</small>
                 <?php endif; ?>
             </div>
 
             <hr>
 
-            <h5>Description</h5>
+            <h5>Beschreibung</h5>
             <p><?= nl2br(htmlspecialchars($parking['description'])) ?></p>
 
             <hr>
 
-
-            <!-- Reviews list -->
             <div class="mt-3">
-                <h5>Reviews</h5>
+                <h5>Bewertungen</h5>
                 <?php if (empty($reviews)): ?>
-                    <p class="text-muted">No reviews yet. Be the first to review this parking.</p>
+                    <p class="text-muted">Noch keine Bewertungen. Seien Sie der erste!</p>
                 <?php else: ?>
                     <?php foreach ($reviews as $r): ?>
                         <div class="border rounded p-2 mb-2">
                             <div class="d-flex justify-content-between">
-                                <div><strong><?= htmlspecialchars($r['username']) ?></strong></div>
-                                <div class="text-warning">★ <?= (int)$r['rating'] ?></div>
+                                <strong><?= htmlspecialchars($r['username']) ?></strong>
+                                <span class="text-warning">★ <?= (int)$r['rating'] ?></span>
                             </div>
                             <?php if (!empty($r['comment'])): ?>
-                                <div class="mt-1"><?= nl2br(htmlspecialchars($r['comment'])) ?></div>
+                                <p class="mt-1"><?= nl2br(htmlspecialchars($r['comment'])) ?></p>
                             <?php endif; ?>
                             <small class="text-muted"><?= htmlspecialchars($r['created_at']) ?></small>
                         </div>
@@ -123,30 +127,31 @@ if (isset($_SESSION['user_id'])) {
                 <?php endif; ?>
             </div>
 
-            <!-- Review form (only for logged-in users) -->
             <div class="mt-3">
-                <h6>Add / Update your review</h6>
+                <h6>Bewertung abgeben</h6>
                 <?php if (!isset($_SESSION['user_id'])): ?>
-                    <p class="text-muted">Please <a href="login.php">login</a> to leave a review.</p>
+                    <p class="text-muted">Bitte <a href="login.php">melden Sie sich an</a>, um eine Bewertung abzugeben.</p>
                 <?php else: ?>
                     <form method="POST" action="review_submit.php">
                         <input type="hidden" name="parking_id" value="<?= $id ?>">
 
                         <div class="mb-2">
-                            <label class="form-label">Rating</label>
+                            <label class="form-label">Bewertung</label>
                             <select name="rating" class="form-select" required>
-                                <?php for ($s=1;$s<=5;$s++): ?>
-                                    <option value="<?= $s ?>" <?= ($userReview && (int)$userReview['rating'] === $s) ? 'selected' : '' ?>><?= $s ?> ★</option>
+                                <?php for ($s = 1; $s <= 5; $s++): ?>
+                                    <option value="<?= $s ?>" <?= ($userReview && (int)$userReview['rating'] === $s) ? 'selected' : '' ?>>
+                                        <?= $s ?> ★
+                                    </option>
                                 <?php endfor; ?>
                             </select>
                         </div>
 
                         <div class="mb-2">
-                            <label class="form-label">Comment (optional)</label>
+                            <label class="form-label">Kommentar (optional)</label>
                             <textarea name="comment" class="form-control" rows="3" maxlength="500"><?= $userReview ? htmlspecialchars($userReview['comment']) : '' ?></textarea>
                         </div>
 
-                        <button class="btn btn-outline-primary">Submit review</button>
+                        <button class="btn btn-outline-primary">Bewertung abgeben</button>
                     </form>
                 <?php endif; ?>
             </div>

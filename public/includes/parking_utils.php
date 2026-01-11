@@ -614,3 +614,85 @@ function delete_neighborhood($id) {
     $stmt->execute();
     $stmt->close();
 }
+
+/**
+ * Check if parking has active bookings
+ */
+function has_active_bookings($parkingId) {
+    global $conn;
+    $parkingId = (int)$parkingId;
+    $today = date('Y-m-d');
+    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM bookings WHERE parking_id = ? AND booking_end >= ?");
+    $stmt->bind_param('is', $parkingId, $today);
+    $stmt->execute();
+    $count = $stmt->get_result()->fetch_assoc()['count'];
+    $stmt->close();
+    return $count > 0;
+}
+
+/**
+ * Update parking price and availability
+ */
+function update_parking_price_availability($parkingId, $userId, $price, $from, $to) {
+    global $conn;
+    $parkingId = (int)$parkingId;
+    $userId = (int)$userId;
+    $price = (float)$price;
+
+    $stmt = $conn->prepare("UPDATE parkings SET price = ? WHERE id = ? AND owner_id = ? AND status = 'approved'");
+    $stmt->bind_param('dii', $price, $parkingId, $userId);
+    $stmt->execute();
+    $stmt->close();
+
+    if ($from && $to && is_valid_date($from) && is_valid_date($to)) {
+        $conn->query("DELETE FROM parking_availability WHERE parking_id = $parkingId");
+        $stmt = $conn->prepare("INSERT INTO parking_availability (parking_id, available_from, available_to) VALUES (?, ?, ?)");
+        $stmt->bind_param('iss', $parkingId, $from, $to);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
+
+/**
+ * Delete parking if no active bookings
+ */
+function delete_parking_if_possible($parkingId, $userId) {
+    global $conn;
+    $parkingId = (int)$parkingId;
+    $userId = (int)$userId;
+
+    $stmt = $conn->prepare("SELECT id FROM parkings WHERE id = ? AND owner_id = ?");
+    $stmt->bind_param('ii', $parkingId, $userId);
+    $stmt->execute();
+
+    if ($stmt->get_result()->num_rows === 0) {
+        $stmt->close();
+        return ['success' => false, 'message' => 'Parkplatz nicht gefunden.'];
+    }
+    $stmt->close();
+
+    if (has_active_bookings($parkingId)) {
+        return ['success' => false, 'message' => 'Diesen Parkplatz können Sie nicht löschen, da aktive Buchungen vorhanden sind.'];
+    }
+
+    $conn->query("DELETE FROM bookings WHERE parking_id = $parkingId");
+    $conn->query("DELETE FROM parking_availability WHERE parking_id = $parkingId");
+    $conn->query("DELETE FROM parkings WHERE id = $parkingId");
+    delete_dir_contents($parkingId);
+
+    return ['success' => true, 'message' => 'Parkplatz gelöscht.'];
+}
+
+/**
+ * Get user's parkings with availability data
+ */
+function get_user_parkings($userId) {
+    global $conn;
+    $userId = (int)$userId;
+    $stmt = $conn->prepare("SELECT p.*, pa.available_from, pa.available_to FROM parkings p LEFT JOIN parking_availability pa ON p.id = pa.parking_id WHERE p.owner_id = ? ORDER BY p.id DESC");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $parkings = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $parkings;
+}
