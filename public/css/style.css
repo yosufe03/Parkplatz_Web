@@ -48,6 +48,10 @@ main {
    Navigation
    ============================================================================ */
 
+/* ============================================================================
+   Navbar (merged, no-JS safe)
+   ============================================================================ */
+
 .navbar {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -58,8 +62,14 @@ main {
     letter-spacing: -0.5px;
 }
 
+/* -------------------------------
+   Hamburger (visual only)
+   ------------------------------- */
+
 .navbar-toggler {
     border: none;
+    background: none;
+    cursor: pointer;
 }
 
 .navbar-toggler:focus {
@@ -67,22 +77,52 @@ main {
     box-shadow: none;
 }
 
-/* Mobile hamburger positioning */
+/* IMPORTANT:
+   No vertical centering.
+   Only horizontal centering.
+*/
 .navbar-toggler.d-lg-none {
     position: absolute;
-    top: 50%;
+    top: 0.75rem;              /* stays in top bar */
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translateX(-50%);
     z-index: 2;
     display: flex;
     align-items: center;
 }
 
+/* -------------------------------
+   No-JS toggle (checkbox)
+   ------------------------------- */
+
+.nav-toggle {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Desktop: show menu normally */
+@media (min-width: 992px) {
+    .navbar-collapse-nojs {
+        display: flex !important;
+    }
+}
+
+/* Mobile behavior */
 @media (max-width: 991.98px) {
-    #navbarMain {
-        flex-direction: column;
+
+    /* menu hidden by default */
+    .navbar-collapse-nojs {
+        display: none;
         width: 100%;
         text-align: center;
+        flex-direction: column;
+        margin-top: 0.5rem;
+    }
+
+    /* show menu when checkbox is checked */
+    #navToggle:checked ~ .navbar-collapse-nojs {
+        display: flex;
     }
 
     .navbar-nav .nav-item {
@@ -93,6 +133,7 @@ main {
         padding: 0.5rem 1rem !important;
     }
 }
+
 
 @media (min-width: 992px) {
     #navbarMain {
@@ -781,22 +822,9 @@ textarea:focus {
 
 .carousel-control-prev-icon,
 .carousel-control-next-icon {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: auto;
-    height: auto;
-    font-size: 1.2rem;
+    font-size: 1.5rem;
     font-weight: bold;
     color: white;
-}
-
-.carousel-control-prev-icon::before {
-    content: "‹";
-}
-
-.carousel-control-next-icon::before {
-    content: "›";
+    line-height: 1;
 }
 
