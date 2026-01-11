@@ -53,11 +53,11 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_me'])) {
 
 $isLoggedIn = isset($_SESSION['user_id']);
 
-if ($isLoggedIn && !isset($_SESSION['is_admin'])) {
+if ($isLoggedIn) {
     $_SESSION['is_admin'] = is_admin($_SESSION['user_id']);
+} else {
+    $_SESSION['is_admin'] = false;
 }
-
-$_SESSION['is_admin'] = $_SESSION['is_admin'] ?? false;
 
 $username = $isLoggedIn ? $_SESSION['username'] : '';
 
