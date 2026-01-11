@@ -4,6 +4,8 @@ if (!isset($config) || !is_array($config)) {
     $config = include __DIR__ . '/../config.php';
 }
 
+include_once("parking_utils.php");
+
 // Configure session settings BEFORE starting session
 if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.cookie_httponly', '1');
@@ -49,6 +51,9 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_me'])) {
 }
 
 $isLoggedIn = isset($_SESSION['user_id']);
+
+$_SESSION['is_admin'] = is_admin($_SESSION['user_id']);
+
 $username = $isLoggedIn ? $_SESSION['username'] : '';
 
 // Check session timeout

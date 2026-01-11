@@ -238,6 +238,18 @@ function delete_parking_image(string $filename, int $parkingId): bool
 
 
 /**
+ * Delete a parking by ID
+ */
+function delete_parking($parkingId) {
+    global $conn;
+    $parkingId = (int)$parkingId;
+    $stmt = $conn->prepare("DELETE FROM parkings WHERE id = ?");
+    $stmt->bind_param("i", $parkingId);
+    $stmt->execute();
+    $stmt->close();
+}
+
+/**
  * Load parking data for a given parking ID and user
  * Returns array with parking info and form fields, or null if not found/unauthorized
  */

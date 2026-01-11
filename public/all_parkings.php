@@ -1,68 +1,30 @@
 <?php
 include_once "includes/parking_utils.php";
 
-// Include header FIRST to start session
 $pageTitle = "Alle Parkplätze";
 include "includes/header.php";
 
-// NOW check auth - session is started
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
 }
 
-$_SESSION['return_to'] = $_SERVER['REQUEST_URI']; // store current page
-
-$userId = $_SESSION['user_id'];
-$username = $_SESSION['username'];
-
-// Check if admin
-$stmtUser = $conn->prepare("SELECT role FROM users WHERE id=?");
-$stmtUser->bind_param("i", $userId);
-$stmtUser->execute();
-$resultUser = $stmtUser->get_result();
-$currentUser = $resultUser->fetch_assoc();
-$isAdmin = $currentUser['role'] === 'admin';
-
-if (!$isAdmin) {
-    die("Access denied.");
+// Admin status is stored in session by header.php
+if (!($_SESSION['is_admin'] ?? false)) {
+    header("Location: index.php");
+    exit;
 }
 
-// Handle deletion
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
-    $deleteId = (int)$_POST['delete_id'];
-
-    if ($isAdmin) {
-        $stmtDel = $conn->prepare("DELETE FROM parkings WHERE id=?");
-        $stmtDel->bind_param("i", $deleteId);
-        $stmtDel->execute();
-        $stmtDel->close();
-        header("Location: all_parkings.php"); // reload page
-        exit;
-    }
-}
-
-// Sorting & filtering
-$allowedSort = ['title','price','created_at','modified_at'];
-$sort = $_GET['sort'] ?? 'id';
-$order = $_GET['order'] ?? 'DESC';
-$order = strtoupper($order) === 'ASC' ? 'ASC' : 'DESC';
-$sort = in_array($sort,$allowedSort) ? $sort : 'id';
-
-// Toggle order function
-function toggleOrder($currentSort,$currentOrder,$column){
-    if($currentSort === $column){
-        return $currentOrder === 'ASC' ? 'DESC' : 'ASC';
-    }
-    return 'ASC';
+    delete_parking($_POST['delete_id']);
+    header("Location: all_parkings.php");
+    exit;
 }
 
 // Filters
 $filters = [];
 $params = [];
 $types = '';
-
-// (location removed) -- filters now include status and owner only
 
 // Status filter
 if (!empty($_GET['status'])) {
@@ -87,11 +49,15 @@ if ($filters) {
 $sql = "SELECT p.*, u.username AS owner_name FROM parkings p 
         LEFT JOIN users u ON p.owner_id = u.id
         $whereSQL
-        ORDER BY $sort $order";
+        ORDER BY p.id DESC";
 
 $stmt = $conn->prepare($sql);
-if (!empty($types)) {
-    $stmt->bind_param($types, ...$params);
+if ($types && !empty($params)) {
+    if (count($params) === 1) {
+        $stmt->bind_param($types, $params[0]);
+    } elseif (count($params) === 2) {
+        $stmt->bind_param($types, $params[0], $params[1]);
+    }
 }
 $stmt->execute();
 $result = $stmt->get_result();
@@ -99,10 +65,6 @@ $result = $stmt->get_result();
 
 <!DOCTYPE html>
 <html lang="de">
-<?php
-    $pageTitle = "Alle Parkplätze";
-    include("includes/header.php");
-?>
 <body>
 
 <div class="container mt-5">
@@ -134,15 +96,15 @@ $result = $stmt->get_result();
 
     <!-- Table -->
     <table class="table table-striped table-bordered">
-        <thead class="table-dark text-center">
+        <thead class="table-dark">
         <tr>
-            <th><a href="?<?= http_build_query(array_merge($_GET, ['sort'=>'title','order'=>toggleOrder($sort,$order,'title')])) ?>" class="text-white text-decoration-none">Titel</a></th>
+            <th>Titel</th>
             <th>Distrikt</th>
             <th>Stadtteil</th>
-            <th><a href="?<?= http_build_query(array_merge($_GET, ['sort'=>'price','order'=>toggleOrder($sort,$order,'price')])) ?>" class="text-white text-decoration-none">Preis</a></th>
+            <th>Preis</th>
             <th>Besitzer</th>
-            <th><a href="?<?= http_build_query(array_merge($_GET, ['sort'=>'created_at','order'=>toggleOrder($sort,$order,'created_at')])) ?>" class="text-white text-decoration-none">Erstellt am</a></th>
-            <th><a href="?<?= http_build_query(array_merge($_GET, ['sort'=>'modified_at','order'=>toggleOrder($sort,$order,'modified_at')])) ?>" class="text-white text-decoration-none">Geändert am</a></th>
+            <th>Erstellt am</th>
+            <th>Geändert am</th>
             <th>Status</th>
             <th>Aktionen</th>
         </tr>
@@ -153,30 +115,8 @@ $result = $stmt->get_result();
                 <td>
                     <a href="parking.php?id=<?= (int)$row['id'] ?>" class="text-decoration-none"><?= htmlspecialchars($row['title']) ?></a>
                 </td>
-                <?php
-                    $districtName = '';
-                    $neighborhoodName = '';
-                    if (!empty($row['district_id'])) {
-                        $dq = $conn->prepare("SELECT name FROM districts WHERE id = ? LIMIT 1");
-                        $did = (int)$row['district_id'];
-                        $dq->bind_param('i', $did);
-                        $dq->execute();
-                        $dres = $dq->get_result();
-                        if ($dr = $dres->fetch_assoc()) $districtName = $dr['name'];
-                        $dq->close();
-                    }
-                    if (!empty($row['neighborhood_id'])) {
-                        $nq = $conn->prepare("SELECT name FROM neighborhoods WHERE id = ? LIMIT 1");
-                        $nid = (int)$row['neighborhood_id'];
-                        $nq->bind_param('i', $nid);
-                        $nq->execute();
-                        $nres = $nq->get_result();
-                        if ($nr = $nres->fetch_assoc()) $neighborhoodName = $nr['name'];
-                        $nq->close();
-                    }
-                ?>
-                <td><?= htmlspecialchars($districtName ?: '—') ?></td>
-                <td><?= htmlspecialchars($neighborhoodName ?: '—') ?></td>
+                <td><?= htmlspecialchars(get_district_name($row['district_id']) ?: '—') ?></td>
+                <td><?= htmlspecialchars(get_neighborhood_name($row['neighborhood_id']) ?: '—') ?></td>
                 <td>€<?= number_format($row['price'],2) ?></td>
                 <td><?= htmlspecialchars($row['owner_name'] ?? 'N/A') ?></td>
                 <td><?= htmlspecialchars($row['created_at']) ?></td>

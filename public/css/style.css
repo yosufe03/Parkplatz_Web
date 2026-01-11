@@ -422,6 +422,13 @@ main {
     border-bottom: 2px solid #dee2e6;
     padding: 0.75rem;
     text-align: left;
+    color: #212529;
+}
+
+thead.table-dark th {
+    background-color: #212529;
+    color: #ffffff;
+    border-bottom: 2px solid #495057;
 }
 
 .table td {
