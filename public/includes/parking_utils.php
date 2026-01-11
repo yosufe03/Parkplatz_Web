@@ -260,18 +260,17 @@ function load_parking_data($parkingId, $userId)
     $parkingId = (int)$parkingId;
     $userId = (int)$userId;
 
-    $stmt = $conn->prepare("SELECT p.*, pa.available_from, pa.available_to
-                            FROM parkings p
-                            LEFT JOIN parking_availability pa ON p.id = pa.parking_id
-                            WHERE p.id = ? AND p.owner_id = ? LIMIT 1");
+    $sql = "SELECT p.*, pa.available_from, pa.available_to
+            FROM parkings p
+            LEFT JOIN parking_availability pa ON p.id = pa.parking_id
+            WHERE p.id = ? AND p.owner_id = ? LIMIT 1";
+    $stmt = $conn->prepare($sql);
     $stmt->bind_param('ii', $parkingId, $userId);
     $stmt->execute();
     $parking = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
-    if (!$parking) {
-        return null;
-    }
+    if (!$parking) return null;
 
     return [
         'parking' => $parking,
@@ -497,5 +496,69 @@ function get_booked_dates($parkingId)
     return $bookedDates;
 }
 
+/**
+ * Get admin statistics
+ */
+function get_admin_stats() {
+    global $conn;
+    $sql = "SELECT 
+        (SELECT COUNT(*) FROM users) as total_users,
+        (SELECT COUNT(*) FROM parkings) as total_parkings,
+        (SELECT COUNT(*) FROM bookings) as total_bookings,
+        (SELECT COALESCE(SUM((DATEDIFF(b.booking_end, b.booking_start) + 1) * b.price_day), 0) FROM bookings b) AS total_revenue,
+        (SELECT COUNT(*) FROM bookings WHERE booking_start <= CURDATE() AND booking_end >= CURDATE()) as active_bookings,
+        (SELECT COUNT(*) FROM parkings WHERE status = 'pending') as pending_count";
+    $stmt = $conn->prepare($sql);
+    $stmt->execute();
+    $stats = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $stats;
+}
 
-?>
+/**
+ * Get top users by earnings
+ */
+function get_top_users($limit = 10) {
+    global $conn;
+    $sql = "SELECT 
+        u.username, 
+        COUNT(p.id) as parking_count, 
+        COALESCE(SUM((DATEDIFF(b.booking_end, b.booking_start) + 1) * b.price_day), 0) AS total_earnings 
+        FROM users u 
+        LEFT JOIN parkings p ON p.owner_id = u.id 
+        LEFT JOIN bookings b ON b.parking_id = p.id 
+        GROUP BY u.id 
+        HAVING parking_count > 0 
+        ORDER BY total_earnings DESC 
+        LIMIT ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $limit);
+    $stmt->execute();
+    $users = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $users;
+}
+
+/**
+ * Get pending parkings
+ */
+function get_pending_parkings($limit = 10) {
+    global $conn;
+    $sql = "SELECT 
+        p.id, 
+        p.title, 
+        p.price, 
+        u.username 
+        FROM parkings p 
+        LEFT JOIN users u ON p.owner_id = u.id 
+        WHERE p.status = 'pending' 
+        ORDER BY p.created_at ASC 
+        LIMIT ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $limit);
+    $stmt->execute();
+    $parkings = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $parkings;
+}
+

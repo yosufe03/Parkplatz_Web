@@ -1,111 +1,73 @@
 <?php
 include_once "includes/parking_utils.php";
 
-// Include header FIRST to start session
 $pageTitle = "Admin Statistiken";
 include "includes/header.php";
 
-// NOW check auth - session is started
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
 }
 
-$userId = (int)$_SESSION['user_id'];
-
-// Check if admin
-$roleStmt = $conn->prepare("SELECT role FROM users WHERE id = ?");
-$roleStmt->bind_param('i', $userId);
-$roleStmt->execute();
-$roleResult = $roleStmt->get_result()->fetch_assoc();
-$roleStmt->close();
-
-if (!$roleResult || $roleResult['role'] !== 'admin') {
-    die("Nur Administratoren können diese Seite anschauen.");
+// Admin status is stored in session by header.php
+if (!($_SESSION['is_admin'] ?? false)) {
+    header("Location: index.php");
+    exit;
 }
 
-// Total stats
-$statsStmt = $conn->prepare(
-    "SELECT 
-        (SELECT COUNT(*) FROM users) as total_users,
-        (SELECT COUNT(*) FROM parkings) as total_parkings,
-        (SELECT COUNT(*) FROM bookings) as total_bookings,
-        (SELECT COALESCE(SUM((DATEDIFF(b.booking_end, b.booking_start) + 1) * b.price_day),0) FROM bookings b) AS total_revenue,
-        (SELECT COUNT(*) FROM bookings WHERE booking_start <= CURDATE() AND booking_end >= CURDATE()) as active_bookings,
-        (SELECT COUNT(*) FROM parkings WHERE status = 'pending') as pending_count"
-);
-$statsStmt->execute();
-$stats = $statsStmt->get_result()->fetch_assoc();
-$statsStmt->close();
-
-// Top users
-$topUsersStmt = $conn->prepare(
-    "SELECT u.username, COUNT(p.id) as parking_count, COALESCE(SUM((DATEDIFF(b.booking_end, b.booking_start) + 1) * b.price_day),0) AS total_earnings
-     FROM users u LEFT JOIN parkings p ON p.owner_id = u.id LEFT JOIN bookings b ON b.parking_id = p.id
-     GROUP BY u.id HAVING parking_count > 0 ORDER BY total_earnings DESC LIMIT 10"
-);
-$topUsersStmt->execute();
-$topUsers = $topUsersStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$topUsersStmt->close();
-
-// Pending parkings
-$pendingStmt = $conn->prepare(
-    "SELECT p.id, p.title, p.price, u.username FROM parkings p LEFT JOIN users u ON p.owner_id = u.id WHERE p.status = 'pending' ORDER BY p.created_at ASC LIMIT 10"
-);
-$pendingStmt->execute();
-$pendingParkings = $pendingStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$pendingStmt->close();
+// Get statistics
+$stats = get_admin_stats();
+$topUsers = get_top_users(10);
+$pendingParkings = get_pending_parkings(10);
 ?>
 
 <!DOCTYPE html>
 <html lang="de">
 <body>
-<div class="container-fluid mt-5">
+<div class="container mt-5">
     <h2>📊 Plattform Übersicht</h2>
 
-    <!-- Metrics -->
     <div class="row mt-4 mb-5">
         <div class="col-md-2">
-            <div class="card p-3 bg-primary text-white">
+            <div class="card p-3 bg-primary text-white h-100">
                 <div class="small">Nutzer</div>
                 <div class="fs-4 fw-bold"><?= (int)$stats['total_users'] ?></div>
             </div>
         </div>
         <div class="col-md-2">
-            <div class="card p-3 bg-success text-white">
+            <div class="card p-3 bg-success text-white h-100">
                 <div class="small">Parkplätze</div>
                 <div class="fs-4 fw-bold"><?= (int)$stats['total_parkings'] ?></div>
             </div>
         </div>
         <div class="col-md-2">
-            <div class="card p-3 bg-info text-white">
+            <div class="card p-3 bg-info text-white h-100">
                 <div class="small">Buchungen</div>
                 <div class="fs-4 fw-bold"><?= (int)$stats['total_bookings'] ?></div>
             </div>
         </div>
         <div class="col-md-2">
-            <div class="card p-3 bg-warning text-dark">
+            <div class="card p-3 bg-warning text-dark h-100">
                 <div class="small">Einnahmen</div>
                 <div class="fs-4 fw-bold">€<?= number_format((float)$stats['total_revenue'], 0) ?></div>
             </div>
         </div>
         <div class="col-md-2">
-            <div class="card p-3 bg-danger text-white">
+            <div class="card p-3 bg-danger text-white h-100">
                 <div class="small">Aktiv</div>
                 <div class="fs-4 fw-bold"><?= (int)$stats['active_bookings'] ?></div>
             </div>
         </div>
         <div class="col-md-2">
-            <div class="card p-3 bg-secondary text-white">
+            <div class="card p-3 bg-secondary text-white h-100">
                 <div class="small">Ausstehend</div>
                 <div class="fs-4 fw-bold"><?= (int)$stats['pending_count'] ?></div>
             </div>
         </div>
     </div>
 
-    <!-- Top Users -->
     <h5 class="mt-5">Top Vermieter</h5>
-    <table class="table table-sm mb-5">
+    <table class="table table-sm">
         <thead>
             <tr>
                 <th>Nutzer</th>
@@ -124,7 +86,6 @@ $pendingStmt->close();
         </tbody>
     </table>
 
-    <!-- Pending Parkings -->
     <h5 class="mt-5">Ausstehend (<?= count($pendingParkings) ?>)</h5>
     <table class="table table-sm">
         <thead>
