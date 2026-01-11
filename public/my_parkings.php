@@ -12,15 +12,12 @@ if (!isset($_SESSION['user_id'])) {
 $userId = (int)$_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['update_parking_id'])) {
-        update_parking_price_availability((int)$_POST['update_parking_id'], $userId, $_POST['price'] ?? 0, $_POST['available_from'] ?? '', $_POST['available_to'] ?? '');
-        $_SESSION['update_success'] = "Parkplatz aktualisiert.";
-    } elseif (isset($_POST['delete_parking_id'])) {
+    if (isset($_POST['delete_parking_id'])) {
         $result = delete_parking_if_possible((int)$_POST['delete_parking_id'], $userId);
         $_SESSION[$result['success'] ? 'update_success' : 'delete_error'] = $result['message'];
+        header('Location: my_parkings.php');
+        exit;
     }
-    header('Location: my_parkings.php');
-    exit;
 }
 
 $parkings = get_user_parkings($userId);
@@ -72,11 +69,7 @@ $statusClass = ['approved' => 'text-success', 'pending' => 'text-warning', 'draf
                         <p><strong>Preis:</strong> €<?= number_format($row['price'], 2) ?></p>
                         <p><strong>Status:</strong> <span class="<?= $statusClass[$row['status']] ?? 'text-secondary' ?>"><?= ucfirst($row['status']) ?></span></p>
                         <a href="parking.php?id=<?= (int)$row['id'] ?>" class="btn btn-primary btn-sm">Anschauen</a>
-                        <?php if ($row['status'] === 'draft'): ?>
-                            <a href="parking_edit.php?id=<?= (int)$row['id'] ?>" class="btn btn-info btn-sm">Bearbeiten</a>
-                        <?php elseif ($row['status'] === 'approved'): ?>
-                            <button type="button" class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#editModal<?= (int)$row['id'] ?>">Bearbeiten</button>
-                        <?php endif; ?>
+                        <a href="parking_edit.php?id=<?= (int)$row['id'] ?>" class="btn btn-info btn-sm">Bearbeiten</a>
                         <form method="POST" class="d-inline">
                             <input type="hidden" name="delete_parking_id" value="<?= (int)$row['id'] ?>">
                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
@@ -85,41 +78,6 @@ $statusClass = ['approved' => 'text-success', 'pending' => 'text-warning', 'draf
                     </div>
                 </div>
             </div>
-
-            <?php if ($row['status'] === 'approved'): ?>
-                <div class="modal fade" id="editModal<?= (int)$row['id'] ?>" tabindex="-1">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Bearbeiten</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                            </div>
-                            <form method="POST">
-                                <div class="modal-body">
-                                    <input type="hidden" name="update_parking_id" value="<?= (int)$row['id'] ?>">
-                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
-                                    <div class="mb-3">
-                                        <label class="form-label">Preis (€/Tag)</label>
-                                        <input type="number" step="0.01" name="price" class="form-control" value="<?= number_format($row['price'], 2) ?>" required>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Von</label>
-                                        <input type="date" name="available_from" class="form-control" value="<?= htmlspecialchars($row['available_from'] ?? '') ?>">
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Bis</label>
-                                        <input type="date" name="available_to" class="form-control" value="<?= htmlspecialchars($row['available_to'] ?? '') ?>">
-                                    </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-                                    <button type="submit" class="btn btn-primary">Speichern</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            <?php endif; ?>
         <?php endforeach; ?>
     </div>
 </div>
