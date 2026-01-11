@@ -818,3 +818,53 @@ function get_booking_status_info($start, $end, $today) {
     return ['status' => 'Vergangen', 'badge' => 'secondary'];
 }
 
+/**
+ * Delete a user and all associated data
+ * Handles cascade deletion of bookings, reviews, parkings, and favorites
+ */
+function delete_user($userId) {
+    global $conn;
+    $userId = (int)$userId;
+
+    // 1. Delete bookings for this user's parkings
+    $stmt = $conn->prepare("DELETE FROM bookings WHERE parking_id IN (SELECT id FROM parkings WHERE owner_id = ?)");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $stmt->close();
+
+    // 2. Delete reviews for this user's parkings
+    $stmt = $conn->prepare("DELETE FROM parking_reviews WHERE parking_id IN (SELECT id FROM parkings WHERE owner_id = ?)");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $stmt->close();
+
+    // 3. Delete parkings owned by this user
+    $stmt = $conn->prepare("DELETE FROM parkings WHERE owner_id = ?");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $stmt->close();
+
+    // 4. Delete reviews written by this user
+    $stmt = $conn->prepare("DELETE FROM parking_reviews WHERE user_id = ?");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $stmt->close();
+
+    // 5. Delete bookings made by this user
+    $stmt = $conn->prepare("DELETE FROM bookings WHERE user_id = ?");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $stmt->close();
+
+    // 6. Delete favorites
+    $stmt = $conn->prepare("DELETE FROM favorites WHERE user_id = ?");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $stmt->close();
+
+    // 7. Finally delete the user
+    $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $stmt->close();
+}

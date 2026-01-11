@@ -144,17 +144,19 @@ if (isset($district_id) && $district_id > 0) {
     </select>
 </div>
 
-<div class="mb-3">
-    <label>Verfügbarkeit</label>
-    <div class="row g-2">
-        <div class="col-md-6">
-            <input type="date" name="available_from" class="form-control" required value="<?= htmlspecialchars($available_from) ?>">
-        </div>
-        <div class="col-md-6">
-            <input type="date" name="available_to" class="form-control" required value="<?= htmlspecialchars($available_to) ?>">
+    <div class="mb-3">
+        <label class="form-label">Verfügbarkeit</label>
+        <div style="display: flex; gap: 1rem;">
+            <div style="flex: 1;">
+                <small class="d-block mb-1">Von</small>
+                <input type="date" name="available_from" class="form-control" required value="<?= htmlspecialchars($available_from) ?>">
+            </div>
+            <div style="flex: 1;">
+                <small class="d-block mb-1">Bis</small>
+                <input type="date" name="available_to" class="form-control" required value="<?= htmlspecialchars($available_to) ?>">
+            </div>
         </div>
     </div>
-</div>
 <!-- Images -->
 <div class="mb-3">
     <label>Bilder (mind. 1, max. 5)</label>
@@ -162,9 +164,9 @@ if (isset($district_id) && $district_id > 0) {
         $slots = $images + array_fill(0, 5, null);
         if (!empty($parkingId)) echo '<input type="hidden" name="id" value="' . (int)$parkingId . '">';
     ?>
-    <div class="row g-2">
+    <div class="row g-4 mt-2">
         <?php for ($i = 0; $i < 5; $i++): ?>
-            <div class="col-md-4">
+            <div class="col-12 col-md-6 col-lg-4">
                 <div style="border:1px dashed #ddd; height:100px; background:#f5f5f5; display:flex; align-items:center; justify-content:center; overflow:hidden;">
                     <?php if ($slots[$i]): ?>
                         <img src="<?= htmlspecialchars($slots[$i]) ?>" style="width:100%; height:100%; object-fit:cover;">
@@ -174,7 +176,7 @@ if (isset($district_id) && $district_id > 0) {
                 </div>
                 <input type="file" name="images[]" class="form-control form-control-sm mt-2" accept="image/*">
                 <div class="d-flex gap-2 mt-2">
-                    <button type="submit" formnovalidate name="upload_image" value="<?= $i ?>" class="btn btn-sm btn-primary">Upload</button>
+                    <button type="submit" formnovalidate name="upload_image" value="<?= $i ?>" class="btn btn-sm btn-primary flex-grow-1">Upload</button>
                     <?php if ($slots[$i]): ?>
                         <button type="submit" formnovalidate name="delete_image" value="<?= basename($slots[$i]) ?>" class="btn btn-sm btn-danger">×</button>
                     <?php endif; ?>

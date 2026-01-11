@@ -125,14 +125,16 @@ generate_csrf_token();
         <a class="navbar-brand" href="index.php">ParkShare</a>
 
         <!-- Hamburger button (mobile only, centered) -->
-        <button class="navbar-toggler d-lg-none" type="button"
-                data-bs-toggle="collapse" data-bs-target="#navbarMain"
-                aria-controls="navbarMain" aria-expanded="false" aria-label="Toggle navigation">
+        <input type="checkbox" id="navToggle" class="nav-toggle">
+
+        <label for="navToggle"
+               class="navbar-toggler d-lg-none"
+               aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
-        </button>
+        </label>
 
         <!-- Center: menu items -->
-        <div class="collapse navbar-collapse justify-content-center" id="navbarMain">
+        <div class="navbar-collapse-nojs justify-content-center" id="navbarMain">
             <ul class="navbar-nav text-center">
                 <li class="nav-item"><a class="nav-link" href="index.php">Home</a></li>
                 <?php if ($isLoggedIn): ?>
@@ -144,6 +146,7 @@ generate_csrf_token();
                 <?php endif; ?>
             </ul>
         </div>
+
 
         <!-- Right: login/username always visible -->
         <div class="d-flex align-items-center ms-auto">
