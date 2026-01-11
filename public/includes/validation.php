@@ -277,18 +277,3 @@ function validate_booking($start_date, $end_date, $parking_id, $user_id) {
 
     return null; // ✅ valid
 }
-
-/**
- * Check if user is admin
- */
-function is_admin($userId) {
-    global $conn;
-    $stmt = $conn->prepare("SELECT role FROM users WHERE id = ?");
-    $stmt->bind_param("i", $userId);
-    $stmt->execute();
-    $result = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-    return ($result['role'] ?? null) === 'admin';
-}
-
-

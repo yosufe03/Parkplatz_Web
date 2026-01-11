@@ -50,9 +50,9 @@ $nextMonth = (clone $currentDate)->modify('+1 month');
     </div>
 <?php endif; ?>
 
-<?php if ($selectedStart && $selectedEnd): ?>
-    <div class="alert alert-success mb-3">
-        <strong>Selected:</strong> <?= htmlspecialchars($selectedStart) ?> → <?= htmlspecialchars($selectedEnd) ?>
+<?php if ($selectedStart): ?>
+    <div class="alert alert-info mb-3">
+        <strong>Selected:</strong> <?= htmlspecialchars($selectedStart) ?><?= $selectedEnd ? ' → ' . htmlspecialchars($selectedEnd) : ' (select end date)' ?>
         <a href="?id=<?= $parkingId ?>" class="btn btn-sm btn-outline-secondary float-end">Clear</a>
     </div>
 <?php endif; ?>
@@ -61,12 +61,12 @@ $nextMonth = (clone $currentDate)->modify('+1 month');
     <div class="card-body">
         <!-- Navigation -->
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <a href="?id=<?= $parkingId ?>&month=<?= $previousMonth->format('m') ?>&year=<?= $previousMonth->format('Y') ?>"
+            <a href="?id=<?= $parkingId ?>&month=<?= $previousMonth->format('m') ?>&year=<?= $previousMonth->format('Y') ?><?= $selectedStart ? '&start_date=' . htmlspecialchars($selectedStart) : '' ?><?= $selectedEnd ? '&end_date=' . htmlspecialchars($selectedEnd) : '' ?>"
                class="btn btn-sm btn-outline-secondary">←</a>
             <h6 class="mb-0">
                 <?= $currentDate->format('F Y') ?>
             </h6>
-            <a href="?id=<?= $parkingId ?>&month=<?= $nextMonth->format('m') ?>&year=<?= $nextMonth->format('Y') ?>"
+            <a href="?id=<?= $parkingId ?>&month=<?= $nextMonth->format('m') ?>&year=<?= $nextMonth->format('Y') ?><?= $selectedStart ? '&start_date=' . htmlspecialchars($selectedStart) : '' ?><?= $selectedEnd ? '&end_date=' . htmlspecialchars($selectedEnd) : '' ?>"
                class="btn btn-sm btn-outline-secondary">→</a>
         </div>
 
@@ -165,6 +165,7 @@ $nextMonth = (clone $currentDate)->modify('+1 month');
         <input type="hidden" name="parking_id" value="<?= $parkingId ?>">
         <input type="hidden" name="booking_start" value="<?= htmlspecialchars($selectedStart) ?>">
         <input type="hidden" name="booking_end" value="<?= htmlspecialchars($selectedEnd) ?>">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
         <button type="submit" class="btn btn-primary w-100">Book now</button>
     </form>
 <?php else: ?>

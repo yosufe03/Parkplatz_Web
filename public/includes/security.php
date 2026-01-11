@@ -4,6 +4,8 @@
  * CSRF tokens, password validation, and other security helpers
  */
 
+require_once __DIR__ . '/db_connect.php';
+
 /**
  * Generate a CSRF token and store it in session
  * @return string The CSRF token
@@ -39,6 +41,24 @@ function verify_csrf_token($token = null) {
     }
 
     return hash_equals($_SESSION['csrf_token'], $token);
+}
+
+/**
+ * Validate CSRF token on POST/PUT/DELETE requests
+ * Sets error in session and returns false if invalid
+ * @return bool True if valid or not a POST request, false if invalid CSRF token
+ */
+function validate_csrf_on_post() {
+    if (!in_array($_SERVER['REQUEST_METHOD'], ['POST', 'PUT', 'DELETE'])) {
+        return true;
+    }
+
+    if (!verify_csrf_token()) {
+        $_SESSION['error'] = 'Sicherheitstoken ungültig. Bitte versuchen Sie es erneut.';
+        return false;
+    }
+
+    return true;
 }
 
 /**
@@ -201,5 +221,27 @@ function clear_rate_limit($action) {
 
     $key = "rate_limit_" . $action;
     unset($_SESSION[$key]);
+}
+
+/**
+ * Check if user is admin by user ID
+ * @param int $user_id The user ID to check
+ * @return bool True if user is admin, false otherwise
+ */
+function is_admin($user_id) {
+    global $conn;
+
+    $stmt = $conn->prepare("SELECT role FROM users WHERE id = ? LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $stmt->close();
+
+    return $row && $row['role'] === 'admin';
 }
 

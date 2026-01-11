@@ -43,6 +43,7 @@ $selected_neighborhoods = $selected_district_id > 0 ? get_neighborhoods_for_dist
         <div class="col-md-5">
             <h5>Distrikte</h5>
             <form method="POST" class="mb-3">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
                 <div class="input-group">
                     <input type="text" name="district_name" class="form-control" placeholder="Neuer Distrikt">
                     <button class="btn btn-primary" name="add_district">Hinzufügen</button>
@@ -62,6 +63,7 @@ $selected_neighborhoods = $selected_district_id > 0 ? get_neighborhoods_for_dist
                             <td>
                                 <form method="POST" style="display:inline;">
                                     <input type="hidden" name="district_id" value="<?= (int)$d['id'] ?>">
+                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
                                     <button type="submit" class="btn btn-sm btn-outline-danger" name="delete_district">Löschen</button>
                                 </form>
                             </td>
@@ -89,6 +91,7 @@ $selected_neighborhoods = $selected_district_id > 0 ? get_neighborhoods_for_dist
 
             <?php if ($selected_district_id > 0): ?>
                 <form method="POST" class="mb-3">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
                     <div class="input-group">
                         <input type="hidden" name="district_for_neigh" value="<?= $selected_district_id ?>">
                         <input type="text" name="neighborhood_name" class="form-control" placeholder="Neuer Stadtteil">
@@ -113,6 +116,7 @@ $selected_neighborhoods = $selected_district_id > 0 ? get_neighborhoods_for_dist
                                     <td>
                                         <form method="POST" style="display:inline;">
                                             <input type="hidden" name="neighborhood_id" value="<?= (int)$n['id'] ?>">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
                                             <button type="submit" class="btn btn-sm btn-outline-danger" name="delete_neighborhood">Löschen</button>
                                         </form>
                                     </td>

@@ -9,6 +9,14 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// Handle favorite toggle
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_favorite'])) {
+    $parkingId = (int)($_POST['parking_id'] ?? 0);
+    if ($parkingId > 0) {
+        toggle_favorite($parkingId, (int)$_SESSION['user_id'], $_POST['action'] ?? 'remove');
+    }
+}
+
 $userId = (int)$_SESSION['user_id'];
 
 $stmt = $conn->prepare("SELECT p.* FROM parkings p JOIN favorites f ON f.parking_id = p.id WHERE f.user_id = ? ORDER BY f.created_at DESC");
@@ -44,8 +52,10 @@ $stmt->close();
                             <p><strong>Preis:</strong> €<?= number_format((float)$row['price'], 2) ?> / Tag</p>
                             <div class="d-flex gap-2">
                                 <a href="parking.php?id=<?= (int)$row['id'] ?>" class="btn btn-sm btn-primary">Ansehen</a>
-                                <form method="POST" action="favorite_toggle.php" class="d-inline">
+                                <form method="POST" class="d-inline">
+                                    <input type="hidden" name="toggle_favorite" value="1">
                                     <input type="hidden" name="parking_id" value="<?= (int)$row['id'] ?>">
+                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
                                     <input type="hidden" name="action" value="remove">
                                     <button class="btn btn-sm btn-outline-danger">Entfernen</button>
                                 </form>

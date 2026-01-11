@@ -58,24 +58,6 @@ function get_image_files($parkingId)
     return $result;
 }
 
-/**
- * Return next image number to use for filename (1..N). Uses existing files to compute max.
- */
-function next_image_number($parkingId)
-{
-    $dir = get_upload_dir($parkingId);
-    if (!is_dir($dir)) return 1;
-    $files = glob($dir . '*');
-    $max = 0;
-    foreach ($files as $f) {
-        $name = pathinfo($f, PATHINFO_FILENAME);
-        if (ctype_digit($name)) {
-            $n = intval($name);
-            if ($n > $max) $max = $n;
-        }
-    }
-    return $max + 1;
-}
 
 /**
  * Delete all files under a parking upload dir and remove the directory.
@@ -153,33 +135,17 @@ function _save_parking_data($userId, $title, $description, $price, $district_id,
 }
 
 /**
- * Save parking as draft
+ * Save parking with specified status (draft/pending)
  * Returns the parking ID
  */
-function save_draft_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $parkingId = null)
+function save_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $status = 'draft', $parkingId = null)
 {
-    return _save_parking_data($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, 'draft', $parkingId);
-}
-
-/**
- * Publish parking (set status to pending)
- * Returns the parking ID
- */
-function publish_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $parkingId = null)
-{
-    return _save_parking_data($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, 'pending', $parkingId);
+    return _save_parking_data($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $status, $parkingId);
 }
 
 function upload_parking_image($slot, $parkingId)
 {
-        if (!$parkingId) {
-            return false;
-        }
-
-    if (
-        !isset($_FILES['images']['tmp_name'][$slot]) ||
-        !is_uploaded_file($_FILES['images']['tmp_name'][$slot])
-    ) {
+    if (!$parkingId || !isset($_FILES['images']['tmp_name'][$slot]) || !is_uploaded_file($_FILES['images']['tmp_name'][$slot])) {
         return false;
     }
 
@@ -189,51 +155,32 @@ function upload_parking_image($slot, $parkingId)
     // Find highest existing number
     $existing = glob($uploadDir . "*.{jpg,jpeg,png}", GLOB_BRACE) ?: [];
     $maxNum = 0;
-
     foreach ($existing as $file) {
-        $filename = basename($file);        // e.g. "12.jpg"
-        $number   = (int) explode('.', $filename)[0]; // take part before "."
-
+        $number = (int)explode('.', basename($file))[0];
         $maxNum = max($maxNum, $number);
     }
 
-    $ext = strtolower(
-        pathinfo($_FILES['images']['name'][$slot], PATHINFO_EXTENSION)
-    );
-
+    $ext = strtolower(pathinfo($_FILES['images']['name'][$slot], PATHINFO_EXTENSION));
     if (!in_array($ext, ['jpg', 'jpeg', 'png'], true)) {
         return false;
     }
 
     $target = $uploadDir . (++$maxNum) . '.' . $ext;
-
-    return move_uploaded_file(
-        $_FILES['images']['tmp_name'][$slot],
-        $target
-    );
+    return move_uploaded_file($_FILES['images']['tmp_name'][$slot], $target);
 }
 
 
 /**
- * Deletes an uploaded image for a parking entry.
- *
- * @param int    $parkingId
- * @param string $filename   File name only (no path!)
- * @return bool              True if deleted, false otherwise
+ * Delete an uploaded image for a parking entry
  */
-function delete_parking_image(string $filename, int $parkingId): bool
+function delete_parking_image($filename, $parkingId)
 {
     if (!$parkingId || !$filename) {
         return false;
     }
 
     $path = get_upload_dir($parkingId) . basename($filename);
-
-    if (!is_file($path)) {
-        return false;
-    }
-
-    return unlink($path);
+    return is_file($path) ? unlink($path) : false;
 }
 
 
@@ -306,16 +253,22 @@ function get_neighborhoods_for_district($districtId)
 
 
 /**
- * Get district name by ID
+ * Get name from table by ID (generic helper)
  */
-function get_district_name($districtId)
+function get_name_by_id($table, $id)
 {
     global $conn;
 
-    if (!$districtId) return '';
+    if (!$id) return '';
 
-    $stmt = $conn->prepare("SELECT name FROM districts WHERE id = ? LIMIT 1");
-    $stmt->bind_param('i', $districtId);
+    // Whitelist valid tables
+    $validTables = ['districts', 'neighborhoods'];
+    if (!in_array($table, $validTables, true)) {
+        return '';
+    }
+
+    $stmt = $conn->prepare("SELECT name FROM " . $table . " WHERE id = ? LIMIT 1");
+    $stmt->bind_param('i', $id);
     $stmt->execute();
     $name = $stmt->get_result()->fetch_assoc()['name'] ?? '';
     $stmt->close();
@@ -324,21 +277,19 @@ function get_district_name($districtId)
 }
 
 /**
+ * Get district name by ID
+ */
+function get_district_name($districtId)
+{
+    return get_name_by_id('districts', $districtId);
+}
+
+/**
  * Get neighborhood name by ID
  */
 function get_neighborhood_name($neighborhoodId)
 {
-    global $conn;
-
-    if (!$neighborhoodId) return '';
-
-    $stmt = $conn->prepare("SELECT name FROM neighborhoods WHERE id = ? LIMIT 1");
-    $stmt->bind_param('i', $neighborhoodId);
-    $stmt->execute();
-    $name = $stmt->get_result()->fetch_assoc()['name'] ?? '';
-    $stmt->close();
-
-    return $name;
+    return get_name_by_id('neighborhoods', $neighborhoodId);
 }
 
 /**
@@ -420,6 +371,87 @@ function get_user_review($parkingId, $userId)
 }
 
 /**
+ * Delete a review - can be deleted by admin or review owner
+ */
+function delete_review($reviewId, $userId, $isAdmin)
+{
+    global $conn;
+
+    $reviewId = (int)$reviewId;
+    $userId = (int)$userId;
+
+    // Get review to check ownership
+    $stmt = $conn->prepare("SELECT user_id FROM parking_reviews WHERE id = ?");
+    $stmt->bind_param("i", $reviewId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $review = $result->fetch_assoc();
+    $stmt->close();
+
+    if (!$review) {
+        return "Bewertung nicht gefunden.";
+    }
+
+    // Check if user is owner or admin
+    if ($review['user_id'] !== $userId && !$isAdmin) {
+        return "Sie haben keine Berechtigung, diese Bewertung zu löschen.";
+    }
+
+    // Delete review
+    $stmt = $conn->prepare("DELETE FROM parking_reviews WHERE id = ?");
+    $stmt->bind_param("i", $reviewId);
+    $success = $stmt->execute();
+    $stmt->close();
+
+    return $success ? null : "Fehler beim Löschen der Bewertung.";
+}
+
+/**
+ * Submit or update a review for a parking
+ */
+function submit_review($parkingId, $userId, $rating, $comment = null)
+{
+    global $conn;
+
+    $parkingId = (int)$parkingId;
+    $userId = (int)$userId;
+    $rating = (int)$rating;
+    $comment = !empty($comment) ? trim($comment) : null;
+
+    // Validate input
+    if ($parkingId <= 0) {
+        return "Parkplatz nicht gefunden.";
+    }
+    if ($rating < 1 || $rating > 5) {
+        return "Rating muss zwischen 1 und 5 liegen.";
+    }
+    if ($comment !== null && mb_strlen($comment) > 500) {
+        return "Kommentar zu lang.";
+    }
+
+    // Insert or update review
+    $stmt = $conn->prepare(
+        "INSERT INTO parking_reviews (parking_id, user_id, rating, comment) VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE rating = VALUES(rating), comment = VALUES(comment), updated_at = CURRENT_TIMESTAMP"
+    );
+
+    if (!$stmt) {
+        return "Datenbankfehler.";
+    }
+
+    $stmt->bind_param('iiis', $parkingId, $userId, $rating, $comment);
+
+    if (!$stmt->execute()) {
+        $error = $stmt->error;
+        $stmt->close();
+        return "Fehler beim Speichern: $error";
+    }
+
+    $stmt->close();
+    return null;
+}
+
+/**
  * Check if parking is in user's favorites
  */
 function is_parking_favorite($parkingId, $userId)
@@ -458,13 +490,27 @@ function toggle_favorite($parkingId, $userId, $action = 'add') {
 }
 
 /**
+ * Helper: Get date range as associative array ['Y-m-d' => true, ...]
+ */
+function _get_date_range($startStr, $endStr)
+{
+    $dates = [];
+    $start = new DateTime(substr($startStr, 0, 10));
+    $end = new DateTime(substr($endStr, 0, 10));
+    while ($start <= $end) {
+        $dates[$start->format('Y-m-d')] = true;
+        $start->modify('+1 day');
+    }
+    return $dates;
+}
+
+/**
  * Get all available dates for a parking as associative array
  * Returns: ['Y-m-d' => true, ...]
  */
 function get_available_dates($parkingId)
 {
     global $conn;
-
     $parkingId = (int)$parkingId;
     $availableDates = [];
 
@@ -474,12 +520,7 @@ function get_available_dates($parkingId)
     $result = $stmt->get_result();
 
     while ($row = $result->fetch_assoc()) {
-        $s = new DateTime(substr($row['available_from'], 0, 10));
-        $e = new DateTime(substr($row['available_to'], 0, 10));
-        while ($s <= $e) {
-            $availableDates[$s->format('Y-m-d')] = true;
-            $s->modify('+1 day');
-        }
+        $availableDates += _get_date_range($row['available_from'], $row['available_to']);
     }
     $stmt->close();
 
@@ -493,7 +534,6 @@ function get_available_dates($parkingId)
 function get_booked_dates($parkingId)
 {
     global $conn;
-
     $parkingId = (int)$parkingId;
     $bookedDates = [];
 
@@ -503,12 +543,7 @@ function get_booked_dates($parkingId)
     $result = $stmt->get_result();
 
     while ($row = $result->fetch_assoc()) {
-        $s = new DateTime($row['booking_start']);
-        $e = new DateTime($row['booking_end']);
-        while ($s <= $e) {
-            $bookedDates[$s->format('Y-m-d')] = true;
-            $s->modify('+1 day');
-        }
+        $bookedDates += _get_date_range($row['booking_start'], $row['booking_end']);
     }
     $stmt->close();
 
@@ -601,6 +636,30 @@ function add_district($name) {
 function delete_district($id) {
     global $conn;
     $id = (int)$id;
+
+    // First get all neighborhoods in this district
+    $stmt = $conn->prepare("SELECT id FROM neighborhoods WHERE district_id = ?");
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $neighborhoods = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    // Delete all parkings in these neighborhoods
+    foreach ($neighborhoods as $n) {
+        $nid = (int)$n['id'];
+        $stmt = $conn->prepare("DELETE FROM parkings WHERE neighborhood_id = ?");
+        $stmt->bind_param('i', $nid);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    // Delete all neighborhoods in this district
+    $stmt = $conn->prepare("DELETE FROM neighborhoods WHERE district_id = ?");
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $stmt->close();
+
+    // Finally delete the district
     $stmt = $conn->prepare("DELETE FROM districts WHERE id = ?");
     $stmt->bind_param('i', $id);
     $stmt->execute();
@@ -612,9 +671,8 @@ function delete_district($id) {
  */
 function add_neighborhood($district_id, $name) {
     global $conn;
-    $district_id = (int)$district_id;
     $name = trim($name);
-    if (!$name || $district_id <= 0) return false;
+    if (!$name || !is_numeric($district_id) || (int)$district_id <= 0) return false;
     $stmt = $conn->prepare("INSERT INTO neighborhoods (district_id, name) VALUES (?, ?)");
     $stmt->bind_param('is', $district_id, $name);
     $stmt->execute();
@@ -628,6 +686,14 @@ function add_neighborhood($district_id, $name) {
 function delete_neighborhood($id) {
     global $conn;
     $id = (int)$id;
+
+    // First delete all parkings in this neighborhood
+    $stmt = $conn->prepare("DELETE FROM parkings WHERE neighborhood_id = ?");
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $stmt->close();
+
+    // Then delete the neighborhood
     $stmt = $conn->prepare("DELETE FROM neighborhoods WHERE id = ?");
     $stmt->bind_param('i', $id);
     $stmt->execute();
@@ -664,7 +730,11 @@ function update_parking_price_availability($parkingId, $userId, $price, $from, $
     $stmt->close();
 
     if ($from && $to && is_valid_date($from) && is_valid_date($to)) {
-        $conn->query("DELETE FROM parking_availability WHERE parking_id = $parkingId");
+        $stmt = $conn->prepare("DELETE FROM parking_availability WHERE parking_id = ?");
+        $stmt->bind_param('i', $parkingId);
+        $stmt->execute();
+        $stmt->close();
+
         $stmt = $conn->prepare("INSERT INTO parking_availability (parking_id, available_from, available_to) VALUES (?, ?, ?)");
         $stmt->bind_param('iss', $parkingId, $from, $to);
         $stmt->execute();
@@ -694,9 +764,21 @@ function delete_parking_if_possible($parkingId, $userId) {
         return ['success' => false, 'message' => 'Diesen Parkplatz können Sie nicht löschen, da aktive Buchungen vorhanden sind.'];
     }
 
-    $conn->query("DELETE FROM bookings WHERE parking_id = $parkingId");
-    $conn->query("DELETE FROM parking_availability WHERE parking_id = $parkingId");
-    $conn->query("DELETE FROM parkings WHERE id = $parkingId");
+    $stmt = $conn->prepare("DELETE FROM bookings WHERE parking_id = ?");
+    $stmt->bind_param('i', $parkingId);
+    $stmt->execute();
+    $stmt->close();
+
+    $stmt = $conn->prepare("DELETE FROM parking_availability WHERE parking_id = ?");
+    $stmt->bind_param('i', $parkingId);
+    $stmt->execute();
+    $stmt->close();
+
+    $stmt = $conn->prepare("DELETE FROM parkings WHERE id = ?");
+    $stmt->bind_param('i', $parkingId);
+    $stmt->execute();
+    $stmt->close();
+
     delete_dir_contents($parkingId);
 
     return ['success' => true, 'message' => 'Parkplatz gelöscht.'];

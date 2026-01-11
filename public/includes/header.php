@@ -25,95 +25,90 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 
+// Helper function to clear remember_me cookie and session
+function logout_user($reason = '') {
+    session_destroy();
+    setcookie('remember_me', '', time() - 3600, '/', '', false, true);
+    if ($reason) {
+        header("Location: login.php?$reason=1");
+    } else {
+        header("Location: login.php");
+    }
+    exit;
+}
+
 // Auto-login from remember_me cookie
 if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_me'])) {
     $token = $_COOKIE['remember_me'];
-
     if (strlen($token) > 64) {
-        $actual_sig = substr($token, -64);
         $email = substr($token, 0, -64);
-        $expected_sig = hash_hmac('sha256', $email, 'secret_key_123');
+        $expected_sig = hash_hmac('sha256', $email, $config['app_secret_key']);
+        $actual_sig = substr($token, -64);
 
         if (hash_equals($actual_sig, $expected_sig)) {
             $stmt = $conn->prepare("SELECT id, username, role, active FROM users WHERE email = ? AND active = 1");
             $stmt->bind_param("s", $email);
             $stmt->execute();
-            $result = $stmt->get_result();
-
-            if ($result->num_rows > 0) {
-                $row = $result->fetch_assoc();
-                $_SESSION['user_id'] = $row['id'];
-                $_SESSION['username'] = $row['username'];
-                $_SESSION['role'] = $row['role'];
-            }
+            $user = $stmt->get_result()->fetch_assoc();
             $stmt->close();
+
+            if ($user) {
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['username'] = $user['username'];
+                $_SESSION['role'] = $user['role'];
+            }
         }
     }
 }
 
 $isLoggedIn = isset($_SESSION['user_id']);
+$username = $isLoggedIn ? $_SESSION['username'] : '';
 
+// Check session timeout and user activity
 if ($isLoggedIn) {
+    if (isset($_SESSION['last_activity']) && time() - $_SESSION['last_activity'] > $config['session_timeout']) {
+        logout_user('expired');
+    }
+
+    $_SESSION['last_activity'] = time();
     $_SESSION['is_admin'] = is_admin($_SESSION['user_id']);
+
+    // Verify user is still active
+    $stmt = $conn->prepare("SELECT active FROM users WHERE id = ? LIMIT 1");
+    $stmt->bind_param('i', $_SESSION['user_id']);
+    $stmt->execute();
+    $user = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$user || !$user['active']) {
+        logout_user('locked');
+    }
+
+    // Check remember_me cookie integrity
+    if (isset($_COOKIE['remember_me'])) {
+        $token = $_COOKIE['remember_me'];
+        if (strlen($token) > 64) {
+            $email = substr($token, 0, -64);
+            $expected_sig = hash_hmac('sha256', $email, $config['app_secret_key']);
+            $actual_sig = substr($token, -64);
+
+            if (!hash_equals($actual_sig, $expected_sig)) {
+                logout_user('tampered');
+            }
+        }
+    }
 } else {
     $_SESSION['is_admin'] = false;
 }
 
-$username = $isLoggedIn ? $_SESSION['username'] : '';
-
-// Check session timeout
-if ($isLoggedIn && isset($_SESSION['last_activity'])) {
-    $inactive_time = time() - $_SESSION['last_activity'];
-
-    if ($inactive_time > $config['session_timeout']) {
-        // Session has expired
-        session_destroy();
-        setcookie('remember_me', '', time() - 3600, '/', '', false, true);
-        header("Location: login.php?expired=1");
-        exit;
-    }
+// Validate CSRF token on POST/PUT/DELETE requests
+if (!validate_csrf_on_post()) {
+    header("Location: " . ($_SERVER['HTTP_REFERER'] ?? 'index.php'));
+    exit;
 }
 
-// Update last activity timestamp
-if ($isLoggedIn) {
-    $_SESSION['last_activity'] = time();
-}
-
-// Check if logged-in user has a valid remember_me cookie (tampering detection)
-if ($isLoggedIn && isset($_COOKIE['remember_me'])) {
-    $token = $_COOKIE['remember_me'];
-
-    if (strlen($token) > 64) {
-        $actual_sig = substr($token, -64);
-        $email = substr($token, 0, -64);
-        $expected_sig = hash_hmac('sha256', $email, $config['app_secret_key']);
-
-        // If signature doesn't match, cookie was tampered with - log out immediately
-        if (!hash_equals($actual_sig, $expected_sig)) {
-            session_destroy();
-            setcookie('remember_me', '', time() - 3600, '/', '', false, true);
-            header("Location: login.php?tampered=1");
-            exit;
-        }
-    }
-}
-
-// Check if user is still active (locked accounts log out immediately)
-if ($isLoggedIn && isset($conn)) {
-    $userId = (int)$_SESSION['user_id'];
-    $stmt = $conn->prepare("SELECT active FROM users WHERE id = ? LIMIT 1");
-    $stmt->bind_param('i', $userId);
-    $stmt->execute();
-    $result = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    if (!$result || !$result['active']) {
-        session_destroy();
-        setcookie('remember_me', '', time() - 3600, '/', '', false, true);
-        header("Location: login.php?locked=1");
-        exit;
-    }
-}
+// Generate CSRF token for forms
+generate_csrf_token();
 ?>
 <head>
     <meta charset="UTF-8">

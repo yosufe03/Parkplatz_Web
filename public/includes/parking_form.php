@@ -50,19 +50,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Save draft - no validation
     if (isset($_POST['save_draft_btn'])) {
-        $savedParkingId = save_draft_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $parkingId ?? null);
+        $savedParkingId = save_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, 'draft', $parkingId ?? null);
         header('Location: parking_edit.php?id=' . $savedParkingId);
         exit;
     }
 
     if (isset($_POST['upload_image']) && $parkingId) {
-        $savedParkingId = save_draft_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $parkingId ?? null);
+        $savedParkingId = save_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, 'draft', $parkingId ?? null);
         upload_parking_image($_POST['upload_image'], $parkingId);
         header('Location: parking_edit.php?id=' . $parkingId);
     }
 
     if (isset($_POST['delete_image']) && $parkingId) {
-        $savedParkingId = save_draft_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $parkingId ?? null);
+        $savedParkingId = save_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, 'draft', $parkingId ?? null);
         delete_parking_image($_POST['delete_image'], $parkingId);
         header('Location: parking_edit.php?id=' . $parkingId);
     }
@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // If no errors, publish
         if (empty($errors)) {
-            publish_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, $parkingId ?? null);
+            save_parking($userId, $title, $description, $price, $district_id, $neighborhood_id, $available_from, $available_to, 'pending', $parkingId ?? null);
             header("Location: my_parkings.php");
             exit;
         }

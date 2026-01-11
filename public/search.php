@@ -10,6 +10,18 @@ $neighborhood_id = (int)($_GET['neighborhood_id'] ?? 0);
 $from = $_GET['from'] ?: date('Y-m-d');
 $to = $_GET['to'] ?: date('Y-m-d', strtotime('+30 days'));
 
+// Handle favorite toggle
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_favorite'])) {
+    if (!isset($_SESSION['user_id'])) {
+        $_SESSION['error'] = 'Sie müssen angemeldet sein.';
+    } else {
+        $parkingId = (int)($_POST['parking_id'] ?? 0);
+        if ($parkingId > 0) {
+            toggle_favorite($parkingId, (int)$_SESSION['user_id'], $_POST['action'] ?? 'add');
+        }
+    }
+}
+
 
 $errors = [];
 if ($district_id && ($err = is_valid_district($district_id))) $errors[] = $err;
@@ -126,8 +138,10 @@ if (empty($errors)) {
                                     <?php endif; ?>
                                 </p>
                                 <?php if (isset($_SESSION['user_id'])): ?>
-                                    <form method="POST" action="favorite_toggle.php" class="mt-2">
+                                    <form method="POST" class="mt-2">
+                                        <input type="hidden" name="toggle_favorite" value="1">
                                         <input type="hidden" name="parking_id" value="<?= $id ?>">
+                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
                                         <input type="hidden" name="action" value="<?= isset($favorites[$id]) ? 'remove' : 'add' ?>">
                                         <button class="btn btn-sm btn-outline-<?= isset($favorites[$id]) ? 'danger' : 'primary' ?>"><?= isset($favorites[$id]) ? '♥' : '♡' ?></button>
                                     </form>

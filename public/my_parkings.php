@@ -79,6 +79,7 @@ $statusClass = ['approved' => 'text-success', 'pending' => 'text-warning', 'draf
                         <?php endif; ?>
                         <form method="POST" class="d-inline">
                             <input type="hidden" name="delete_parking_id" value="<?= (int)$row['id'] ?>">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
                             <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Sicher?');">Löschen</button>
                         </form>
                     </div>
@@ -96,6 +97,7 @@ $statusClass = ['approved' => 'text-success', 'pending' => 'text-warning', 'draf
                             <form method="POST">
                                 <div class="modal-body">
                                     <input type="hidden" name="update_parking_id" value="<?= (int)$row['id'] ?>">
+                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
                                     <div class="mb-3">
                                         <label class="form-label">Preis (€/Tag)</label>
                                         <input type="number" step="0.01" name="price" class="form-control" value="<?= number_format($row['price'], 2) ?>" required>

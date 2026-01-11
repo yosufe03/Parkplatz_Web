@@ -13,8 +13,9 @@ $userId = (int)$_SESSION['user_id'];
 $today = date('Y-m-d');
 
 if (isset($_POST['cancel_booking_id'])) {
+    $bookingId = (int)$_POST['cancel_booking_id'];
     $stmt = $conn->prepare("DELETE FROM bookings WHERE id = ? AND user_id = ?");
-    $stmt->bind_param("ii", $_POST['cancel_booking_id'], $userId);
+    $stmt->bind_param("ii", $bookingId, $userId);
     $stmt->execute();
     $stmt->close();
     header("Location: my_bookings.php?canceled=1");
@@ -100,6 +101,7 @@ $upcoming = count(array_filter($bookings, fn($b) => $b['booking_end'] >= $today)
                             <?php if ($b['booking_start'] > $today): ?>
                                 <form method="POST">
                                     <input type="hidden" name="cancel_booking_id" value="<?= (int)$b['id'] ?>">
+                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
                                     <button type="submit" class="btn btn-sm btn-outline-danger">Stornieren</button>
                                 </form>
                             <?php else: ?>

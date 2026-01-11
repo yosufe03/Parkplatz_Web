@@ -10,6 +10,47 @@ if ($id <= 0) {
     exit;
 }
 
+// Handle favorite toggle
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_favorite'])) {
+    if (!isset($_SESSION['user_id'])) {
+        $_SESSION['error'] = 'Sie müssen angemeldet sein.';
+    } else {
+        toggle_favorite($id, (int)$_SESSION['user_id'], $_POST['action'] ?? 'add');
+    }
+}
+
+// Handle review deletion
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_review'])) {
+    if (!isset($_SESSION['user_id'])) {
+        $_SESSION['error'] = 'Sie müssen angemeldet sein.';
+    } else {
+        $reviewId = (int)$_POST['review_id'];
+        $error = delete_review($reviewId, $_SESSION['user_id'], $_SESSION['is_admin']);
+        if ($error) {
+            $_SESSION['error'] = $error;
+        } else {
+            $_SESSION['success'] = 'Bewertung erfolgreich gelöscht.';
+        }
+    }
+}
+
+// Handle review submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_review'])) {
+    if (!isset($_SESSION['user_id'])) {
+        $_SESSION['error'] = 'Sie müssen angemeldet sein.';
+    } else {
+        $parkingId = (int)($_POST['parking_id'] ?? 0);
+        $rating = (int)($_POST['rating'] ?? 0);
+        $comment = $_POST['comment'] ?? null;
+        $error = submit_review($parkingId, (int)$_SESSION['user_id'], $rating, $comment);
+        if ($error) {
+            $_SESSION['error'] = $error;
+        } else {
+            $_SESSION['success'] = 'Bewertung gespeichert.';
+        }
+    }
+}
+
 $parking = get_parking_by_id($id);
 if (!$parking) {
     header("Location: index.php");
@@ -78,8 +119,10 @@ if (isset($_SESSION['user_id'])) {
             <?php endif; ?>
 
             <?php if (isset($_SESSION['user_id'])): ?>
-                <form method="POST" action="favorite_toggle.php" class="mb-2">
+                <form method="POST" class="mb-2">
+                    <input type="hidden" name="toggle_favorite" value="1">
                     <input type="hidden" name="parking_id" value="<?= $id ?>">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
                     <?php if ($isFavorite): ?>
                         <input type="hidden" name="action" value="remove">
                         <button class="btn btn-sm btn-outline-danger">♥ Entfernen</button>
@@ -114,9 +157,19 @@ if (isset($_SESSION['user_id'])) {
                 <?php else: ?>
                     <?php foreach ($reviews as $r): ?>
                         <div class="border rounded p-2 mb-2">
-                            <div class="d-flex justify-content-between">
-                                <strong><?= htmlspecialchars($r['username']) ?></strong>
-                                <span class="text-warning">★ <?= (int)$r['rating'] ?></span>
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong><?= htmlspecialchars($r['username']) ?></strong>
+                                    <span class="text-warning">★ <?= (int)$r['rating'] ?></span>
+                                </div>
+                                <?php if (isset($_SESSION['user_id']) && ($r['user_id'] == $_SESSION['user_id'] || $_SESSION['is_admin'])): ?>
+                                    <form method="POST" style="display: inline;">
+                                        <input type="hidden" name="delete_review" value="1">
+                                        <input type="hidden" name="review_id" value="<?= $r['id'] ?>">
+                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bewertung wirklich löschen?')">Löschen</button>
+                                    </form>
+                                <?php endif; ?>
                             </div>
                             <?php if (!empty($r['comment'])): ?>
                                 <p class="mt-1"><?= nl2br(htmlspecialchars($r['comment'])) ?></p>
@@ -132,8 +185,10 @@ if (isset($_SESSION['user_id'])) {
                 <?php if (!isset($_SESSION['user_id'])): ?>
                     <p class="text-muted">Bitte <a href="login.php">melden Sie sich an</a>, um eine Bewertung abzugeben.</p>
                 <?php else: ?>
-                    <form method="POST" action="review_submit.php">
+                    <form method="POST">
+                        <input type="hidden" name="submit_review" value="1">
                         <input type="hidden" name="parking_id" value="<?= $id ?>">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
 
                         <div class="mb-2">
                             <label class="form-label">Bewertung</label>
@@ -148,10 +203,10 @@ if (isset($_SESSION['user_id'])) {
 
                         <div class="mb-2">
                             <label class="form-label">Kommentar (optional)</label>
-                            <textarea name="comment" class="form-control" rows="3" maxlength="500"><?= $userReview ? htmlspecialchars($userReview['comment']) : '' ?></textarea>
+                            <textarea name="comment" class="form-control" rows="3" maxlength="500"><?= $userReview && !empty($userReview['comment']) ? htmlspecialchars($userReview['comment']) : '' ?></textarea>
                         </div>
 
-                        <button class="btn btn-outline-primary">Bewertung abgeben</button>
+                        <button type="submit" class="btn btn-primary w-100">Bewertung abgeben</button>
                     </form>
                 <?php endif; ?>
             </div>

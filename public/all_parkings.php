@@ -127,6 +127,7 @@ $result = $stmt->get_result();
 
                     <form method="POST" style="display:inline;" onsubmit="return confirm('Möchten Sie diesen Parkplatz wirklich löschen?');">
                         <input type="hidden" name="delete_id" value="<?= (int)$row['id'] ?>">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
                         <button type="submit" class="btn btn-sm btn-danger mb-1">Löschen</button>
                     </form>
                 </td>
