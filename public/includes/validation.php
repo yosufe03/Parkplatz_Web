@@ -1,5 +1,5 @@
 <?php
-include "db_connect.php";
+require_once "db_connect.php";
 /**
  * Validation Utilities
  * Common validation functions for forms and data
@@ -290,3 +290,5 @@ function is_admin($userId) {
     $stmt->close();
     return ($result['role'] ?? null) === 'admin';
 }
+
+

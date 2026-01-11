@@ -4,7 +4,12 @@ if (!isset($config) || !is_array($config)) {
     $config = include __DIR__ . '/../config.php';
 }
 
-include_once("parking_utils.php");
+// Include utilities BEFORE parking_utils to prevent double inclusion
+include_once __DIR__ . '/db_connect.php';
+include_once __DIR__ . '/security.php';
+include_once __DIR__ . '/validation.php';
+
+include_once __DIR__ . '/parking_utils.php';
 
 // Configure session settings BEFORE starting session
 if (session_status() === PHP_SESSION_NONE) {
@@ -19,10 +24,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Include utilities after session is started
-include_once __DIR__ . '/db_connect.php';
-include_once __DIR__ . '/security.php';
-include_once __DIR__ . '/validation.php';
 
 // Auto-login from remember_me cookie
 if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_me'])) {
@@ -52,7 +53,11 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_me'])) {
 
 $isLoggedIn = isset($_SESSION['user_id']);
 
-$_SESSION['is_admin'] = is_admin($_SESSION['user_id']);
+if ($isLoggedIn && !isset($_SESSION['is_admin'])) {
+    $_SESSION['is_admin'] = is_admin($_SESSION['user_id']);
+}
+
+$_SESSION['is_admin'] = $_SESSION['is_admin'] ?? false;
 
 $username = $isLoggedIn ? $_SESSION['username'] : '';
 

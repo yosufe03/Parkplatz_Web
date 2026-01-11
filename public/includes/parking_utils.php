@@ -5,9 +5,9 @@
  */
 
 // Database connection
-include "db_connect.php";
-include "security.php";
-include "validation.php";
+require_once "db_connect.php";
+require_once "security.php";
+require_once "validation.php";
 
 // Shared parking helpers for ParkShare app
 

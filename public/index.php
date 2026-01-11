@@ -1,10 +1,10 @@
 <?php
-include("includes/db_connect.php");
+include_once("includes/db_connect.php");
+include_once("includes/header.php");
 ?>
 
 <!DOCTYPE html>
 <html lang="de">
-<?php include("includes/header.php"); ?>
 
 <body>
 <div class="container mt-5">

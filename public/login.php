@@ -1,10 +1,10 @@
 <?php
-include("includes/db_connect.php");
-include("includes/security.php");
+include_once("includes/db_connect.php");
+include_once("includes/security.php");
 
 // Include header FIRST to start session
 $pageTitle = "Login";
-include("includes/header.php");
+include_once("includes/header.php");
 
 // NOW check if already logged in - session is started
 if (isset($_SESSION['user_id'])) {
