@@ -562,3 +562,55 @@ function get_pending_parkings($limit = 10) {
     return $parkings;
 }
 
+/**
+ * Add a district
+ */
+function add_district($name) {
+    global $conn;
+    $name = trim($name);
+    if (!$name) return false;
+    $stmt = $conn->prepare("INSERT INTO districts (name) VALUES (?)");
+    $stmt->bind_param('s', $name);
+    $stmt->execute();
+    $stmt->close();
+    return true;
+}
+
+/**
+ * Delete a district
+ */
+function delete_district($id) {
+    global $conn;
+    $id = (int)$id;
+    $stmt = $conn->prepare("DELETE FROM districts WHERE id = ?");
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $stmt->close();
+}
+
+/**
+ * Add a neighborhood
+ */
+function add_neighborhood($district_id, $name) {
+    global $conn;
+    $district_id = (int)$district_id;
+    $name = trim($name);
+    if (!$name || $district_id <= 0) return false;
+    $stmt = $conn->prepare("INSERT INTO neighborhoods (district_id, name) VALUES (?, ?)");
+    $stmt->bind_param('is', $district_id, $name);
+    $stmt->execute();
+    $stmt->close();
+    return true;
+}
+
+/**
+ * Delete a neighborhood
+ */
+function delete_neighborhood($id) {
+    global $conn;
+    $id = (int)$id;
+    $stmt = $conn->prepare("DELETE FROM neighborhoods WHERE id = ?");
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $stmt->close();
+}

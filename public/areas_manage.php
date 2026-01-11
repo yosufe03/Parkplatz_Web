@@ -1,92 +1,40 @@
 <?php
 include_once "includes/parking_utils.php";
 
-// Include header FIRST to start session
 $pageTitle = "Bereiche verwalten";
 include "includes/header.php";
 
-// NOW check auth - session is started
-if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
+if (!($_SESSION['is_admin'] ?? false)) {
+    header("Location: index.php");
     exit;
 }
 
-$userId = (int)$_SESSION['user_id'];
-
-// Check admin
-$stmt = $conn->prepare("SELECT role FROM users WHERE id = ?");
-$stmt->bind_param('i', $userId);
-$stmt->execute();
-$res = $stmt->get_result();
-$row = $res->fetch_assoc();
-if (!$row || $row['role'] !== 'admin') {
-    die('Access denied');
-}
-$stmt->close();
-
-// Handle POST actions: add_district, delete_district, add_neighborhood, delete_neighborhood
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['add_district'])) {
-        $name = trim($_POST['district_name'] ?? '');
-        if ($name !== '') {
-            $i = $conn->prepare("INSERT INTO districts (name) VALUES (?)");
-            $i->bind_param('s', $name);
-            $i->execute();
-            $i->close();
-        }
-    }
-    if (isset($_POST['delete_district'])) {
-        $did = (int)$_POST['district_id'];
-        $d = $conn->prepare("DELETE FROM districts WHERE id = ?");
-        $d->bind_param('i', $did);
-        $d->execute();
-        $d->close();
+        add_district($_POST['district_name'] ?? '');
+    } elseif (isset($_POST['delete_district'])) {
+        delete_district($_POST['district_id']);
+    } elseif (isset($_POST['add_neighborhood'])) {
+        add_neighborhood($_POST['district_for_neigh'], $_POST['neighborhood_name'] ?? '');
+    } elseif (isset($_POST['delete_neighborhood'])) {
+        delete_neighborhood($_POST['neighborhood_id']);
     }
 
-    if (isset($_POST['add_neighborhood'])) {
-        $nid = (int)$_POST['district_for_neigh'];
-        $nname = trim($_POST['neighborhood_name'] ?? '');
-        if ($nname !== '' && $nid > 0) {
-            $in = $conn->prepare("INSERT INTO neighborhoods (district_id, name) VALUES (?, ?)");
-            $in->bind_param('is', $nid, $nname);
-            $in->execute();
-            $in->close();
-        }
+    $redirect = 'areas_manage.php';
+    $district_id = (int)($_POST['district_for_neigh'] ?? ($_GET['district_id'] ?? 0));
+    if ($district_id > 0) {
+        $redirect .= '?district_id=' . $district_id;
     }
-    if (isset($_POST['delete_neighborhood'])) {
-        $nn = (int)$_POST['neighborhood_id'];
-        $dn = $conn->prepare("DELETE FROM neighborhoods WHERE id = ?");
-        $dn->bind_param('i', $nn);
-        $dn->execute();
-        $dn->close();
-    }
-
-    header('Location: areas_manage.php');
+    header('Location: ' . $redirect);
     exit;
 }
 
-// Load districts and neighborhoods
-$dstmt = $conn->prepare("SELECT * FROM districts ORDER BY name ASC");
-$dstmt->execute();
-$dres = $dstmt->get_result();
-$districts = [];
-while ($d = $dres->fetch_assoc()) $districts[] = $d;
-$dstmt->close();
-
-// Load neighborhoods grouped by district
-$nstmt = $conn->prepare("SELECT * FROM neighborhoods ORDER BY name ASC");
-$nstmt->execute();
-$nres = $nstmt->get_result();
-$neigh = [];
-while ($n = $nres->fetch_assoc()) {
-    $neigh[(int)$n['district_id']][] = $n;
-}
-$nstmt->close();
-
+$districts = get_districts();
+$selected_district_id = (int)($_POST['district_for_neigh'] ?? ($_GET['district_id'] ?? 0));
+$selected_neighborhoods = $selected_district_id > 0 ? get_neighborhoods_for_district($selected_district_id) : [];
 ?>
 <!DOCTYPE html>
 <html lang="de">
-<?php $pageTitle = 'Gebietsverwaltung'; include('includes/header.php'); ?>
 <body>
 <div class="container mt-4">
     <h2>Gebiete verwalten</h2>
@@ -100,60 +48,85 @@ $nstmt->close();
                     <button class="btn btn-primary" name="add_district">Hinzufügen</button>
                 </div>
             </form>
-            <ul class="list-group">
-                <?php foreach ($districts as $d): ?>
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <?= htmlspecialchars($d['name']) ?>
-                        <form method="POST" style="margin:0;">
-                            <input type="hidden" name="district_id" value="<?= (int)$d['id'] ?>">
-                            <button class="btn btn-sm btn-outline-danger" name="delete_district" onclick="return confirm('Delete district?');">Löschen</button>
-                        </form>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
+            <table class="table table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Name</th>
+                        <th style="width: 120px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($districts as $d): ?>
+                        <tr>
+                            <td><?= htmlspecialchars($d['name']) ?></td>
+                            <td>
+                                <form method="POST" style="display:inline;">
+                                    <input type="hidden" name="district_id" value="<?= (int)$d['id'] ?>">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" name="delete_district">Löschen</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
 
         <div class="col-md-7">
-            <h5>Stadtteile / Nachbarschaften</h5>
-            <form method="POST" class="mb-3">
-                <div class="row g-2">
-                    <div class="col-md-6">
-                        <select name="district_for_neigh" class="form-select">
-                            <?php foreach ($districts as $d): ?>
-                                <option value="<?= (int)$d['id'] ?>"><?= htmlspecialchars($d['name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <input type="text" name="neighborhood_name" class="form-control" placeholder="Neuer Stadtteil">
-                    </div>
-                    <div class="col-md-2">
-                        <button class="btn btn-primary w-100" name="add_neighborhood">Hinzufügen</button>
-                    </div>
+            <h5>Stadtteile</h5>
+            <form method="GET" class="mb-3">
+                <div class="input-group mb-2">
+                    <select name="district_id" class="form-select">
+                        <option value="0">Distrikt wählen...</option>
+                        <?php foreach ($districts as $d): ?>
+                            <option value="<?= (int)$d['id'] ?>" <?= $selected_district_id === (int)$d['id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($d['name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit" class="btn btn-outline-secondary">Wählen</button>
                 </div>
             </form>
 
-            <?php foreach ($districts as $d): ?>
-                <h6 class="mt-3"><?= htmlspecialchars($d['name']) ?></h6>
-                <ul class="list-group mb-2">
-                    <?php $list = $neigh[(int)$d['id']] ?? []; ?>
-                    <?php if (empty($list)): ?>
-                        <li class="list-group-item text-muted">Keine Stadtteile</li>
-                    <?php else: ?>
-                        <?php foreach ($list as $n): ?>
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                <?= htmlspecialchars($n['name']) ?>
-                                <form method="POST" style="margin:0;">
-                                    <input type="hidden" name="neighborhood_id" value="<?= (int)$n['id'] ?>">
-                                    <button class="btn btn-sm btn-outline-danger" name="delete_neighborhood" onclick="return confirm('Delete neighborhood?');">Löschen</button>
-                                </form>
-                            </li>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </ul>
-            <?php endforeach; ?>
+            <?php if ($selected_district_id > 0): ?>
+                <form method="POST" class="mb-3">
+                    <div class="input-group">
+                        <input type="hidden" name="district_for_neigh" value="<?= $selected_district_id ?>">
+                        <input type="text" name="neighborhood_name" class="form-control" placeholder="Neuer Stadtteil">
+                        <button type="submit" class="btn btn-primary" name="add_neighborhood">Hinzufügen</button>
+                    </div>
+                </form>
+
+                <table class="table table-sm">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Name</th>
+                            <th style="width: 80px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($selected_neighborhoods)): ?>
+                            <tr><td colspan="2" class="text-muted">Keine Stadtteile</td></tr>
+                        <?php else: ?>
+                            <?php foreach ($selected_neighborhoods as $n): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($n['name']) ?></td>
+                                    <td>
+                                        <form method="POST" style="display:inline;">
+                                            <input type="hidden" name="neighborhood_id" value="<?= (int)$n['id'] ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" name="delete_neighborhood">Löschen</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            <?php else: ?>
+                <div class="alert alert-info">Bitte wählen Sie einen Distrikt</div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
+
 </body>
 </html>
