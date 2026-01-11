@@ -1,12 +1,14 @@
 -- Users
 CREATE TABLE users (
-                       id INT AUTO_INCREMENT PRIMARY KEY,
-                       username VARCHAR(50) NOT NULL,
-                       email VARCHAR(100) NOT NULL,
-                       password_hash VARCHAR(255) NOT NULL,
-                       role ENUM('user', 'admin') DEFAULT 'user',
-                       active TINYINT(1) DEFAULT 1,     -- 1 = aktiv, 0 = gesperrt
-                       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role ENUM('user', 'admin') DEFAULT 'user',
+    active TINYINT(1) DEFAULT 1,     -- 1 = aktiv, 0 = gesperrt
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_email (email),
+    INDEX idx_username (username)
 );
 
 -- Districts (Stadtteile) and Neighborhoods
@@ -48,24 +50,41 @@ CREATE TABLE parkings (
 );
 
 CREATE TABLE parking_availability (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      parking_id INT NOT NULL,
-      available_from DATE NOT NULL DEFAULT CURRENT_DATE,
-      available_to DATE NOT NULL DEFAULT CURRENT_DATE,
-      FOREIGN KEY (parking_id) REFERENCES parkings(id) ON DELETE CASCADE
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    parking_id INT NOT NULL,
+    available_from DATE NOT NULL DEFAULT CURRENT_DATE,
+    available_to DATE NOT NULL DEFAULT CURRENT_DATE,
+    FOREIGN KEY (parking_id) REFERENCES parkings(id) ON DELETE CASCADE,
+
+    -- Indexes for common queries
+    INDEX idx_parking_id (parking_id),
+    INDEX idx_available_dates (available_from, available_to),
+
+    -- Ensure end date is not before start date
+    CONSTRAINT chk_availability_dates CHECK (available_to >= available_from)
 );
 
 CREATE TABLE bookings (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      parking_id INT NOT NULL,
-      user_id INT NOT NULL,
-      booking_start DATE NOT NULL,
-      booking_end DATE NOT NULL,
-      price_day DECIMAL(10,2) NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    parking_id INT NOT NULL,
+    user_id INT NOT NULL,
+    booking_start DATE NOT NULL,
+    booking_end DATE NOT NULL,
+    price_day DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-      FOREIGN KEY (parking_id) REFERENCES parkings(id) ON DELETE CASCADE,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (parking_id) REFERENCES parkings(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+
+    -- Indexes for common queries
+    INDEX idx_parking_id (parking_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_booking_dates (booking_start, booking_end),
+
+    -- Ensure end date is not before start date
+    CONSTRAINT chk_booking_dates CHECK (booking_end >= booking_start),
+    -- Ensure price is non-negative
+    CONSTRAINT chk_price_positive CHECK (price_day >= 0)
 );
 
 CREATE TABLE parking_reviews (
