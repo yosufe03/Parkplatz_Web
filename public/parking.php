@@ -90,6 +90,11 @@ if (isset($_SESSION['user_id'])) {
         <div class="col-md-7">
             <?php if ($images): ?>
                 <div id="carousel" class="carousel slide mb-4">
+                    <div class="carousel-indicators">
+                        <?php foreach ($images as $i => $img): ?>
+                            <button type="button" data-bs-target="#carousel" data-bs-slide-to="<?= $i ?>" class="<?= $i === 0 ? 'active' : '' ?>" aria-label="Slide <?= $i + 1 ?>"></button>
+                        <?php endforeach; ?>
+                    </div>
                     <div class="carousel-inner">
                         <?php foreach ($images as $i => $img): ?>
                             <div class="carousel-item <?= $i === 0 ? 'active' : '' ?>">
@@ -97,6 +102,14 @@ if (isset($_SESSION['user_id'])) {
                             </div>
                         <?php endforeach; ?>
                     </div>
+                    <button class="carousel-control-prev" type="button" data-bs-target="#carousel" data-bs-slide="prev">
+                        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Vorheriges Bild</span>
+                    </button>
+                    <button class="carousel-control-next" type="button" data-bs-target="#carousel" data-bs-slide="next">
+                        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Nächstes Bild</span>
+                    </button>
                 </div>
             <?php endif; ?>
 
