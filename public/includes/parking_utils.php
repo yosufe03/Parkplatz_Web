@@ -439,6 +439,25 @@ function is_parking_favorite($parkingId, $userId)
 }
 
 /**
+ * Toggle favorite parking for user
+ */
+function toggle_favorite($parkingId, $userId, $action = 'add') {
+    global $conn;
+    $parkingId = (int)$parkingId;
+    $userId = (int)$userId;
+
+    if ($action === 'remove') {
+        $stmt = $conn->prepare("DELETE FROM favorites WHERE parking_id = ? AND user_id = ?");
+    } else {
+        $stmt = $conn->prepare("INSERT IGNORE INTO favorites (parking_id, user_id) VALUES (?, ?)");
+    }
+
+    $stmt->bind_param('ii', $parkingId, $userId);
+    $stmt->execute();
+    $stmt->close();
+}
+
+/**
  * Get all available dates for a parking as associative array
  * Returns: ['Y-m-d' => true, ...]
  */
