@@ -696,3 +696,24 @@ function get_user_parkings($userId) {
     $stmt->close();
     return $parkings;
 }
+
+/**
+ * Calculate days between two dates (inclusive)
+ */
+function get_days_between($start, $end) {
+    return (new DateTime($end))->diff(new DateTime($start))->days + 1;
+}
+
+/**
+ * Get booking status and badge color
+ */
+function get_booking_status_info($start, $end, $today) {
+    if ($start <= $today && $end >= $today) {
+        return ['status' => 'Aktiv', 'badge' => 'success'];
+    }
+    if ($start > $today) {
+        return ['status' => 'Kommend', 'badge' => 'primary'];
+    }
+    return ['status' => 'Vergangen', 'badge' => 'secondary'];
+}
+
